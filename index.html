@@ -1,0 +1,1594 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>피부과 의원 자금·손익 관제 (검증보완 완료)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    :root {
+      --background: #0f172a;
+      --card: #1e293b;
+      --card-border: #334155;
+      --border: #334155;
+      --foreground: #f8fafc;
+      --muted-foreground: #94a3b8;
+      --primary: #3b82f6;
+      --primary-foreground: #ffffff;
+      --secondary: #334155;
+      --secondary-foreground: #e2e8f0;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --error: #ef4444;
+      --link: #60a5fa;
+      --chart-1: #3b82f6;
+      --chart-2: #10b981;
+      --chart-3: #f59e0b;
+      --chart-4: #a855f7;
+      --chart-5: #ec4899;
+      --chart-6: #eab308;
+    }
+
+    .tab-active {
+      background-color: var(--primary) !important;
+      color: var(--primary-foreground) !important;
+      font-weight: 600;
+    }
+
+    .is-folded {
+      max-width: 386px;
+      margin: 0 auto;
+      border: 3px solid var(--border);
+      border-radius: 28px;
+      padding: 14px 12px;
+      background-color: var(--background);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+    }
+
+    .only-folded { display: none; }
+    .is-folded .only-folded { display: inline; }
+    .is-folded .only-unfolded { display: none !important; }
+    .is-folded .fold-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)) !important; }
+    .is-folded .fold-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+
+    @keyframes pulseFlash {
+      0% { transform: scale(1.03); background-color: rgba(34, 197, 94, 0.25); }
+      100% { transform: scale(1); background-color: transparent; }
+    }
+    .flash-change {
+      animation: pulseFlash 0.8s ease-out;
+    }
+  </style>
+</head>
+<body class="bg-[var(--background)] text-[var(--foreground)] antialiased p-3 md:p-6 min-h-screen">
+
+  <div class="max-w-7xl mx-auto space-y-4">
+    <!-- Top Control Bar -->
+    <div class="flex flex-wrap items-center justify-between gap-2 bg-[var(--card)] border border-[var(--border)] rounded-xl p-3">
+      <div class="flex items-center gap-2">
+        <span class="px-2.5 py-1 text-xs font-bold rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)]">🚩 공식 기준일: 매월 21일</span>
+        <span class="px-2 py-0.5 text-xs rounded bg-[var(--secondary)] text-[var(--success)] font-semibold">✔ 검증보완 완료</span>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-1.5">
+        <button type="button" onclick="switchTopPanel('sms')" class="px-2.5 py-1.5 text-xs font-bold rounded-lg bg-[var(--success)] text-black transition hover:opacity-90">
+          ⚡ 문자 파서 검증기
+        </button>
+        <button type="button" onclick="switchTopPanel('whatif')" class="px-2.5 py-1.5 text-xs font-bold rounded-lg bg-[var(--warning)] text-black transition hover:opacity-90">
+          🧪 시뮬레이터 · ⚙️ 초기값
+        </button>
+        <button type="button" onclick="switchTopPanel('cloud')" class="px-2.5 py-1.5 text-xs font-bold rounded-lg bg-[var(--secondary)] text-[var(--secondary-foreground)] transition hover:opacity-90">
+          ☁️ 폴드5 클라우드 연결
+        </button>
+        <button type="button" id="btn-mode-folded" onclick="setScreenMode('folded')" class="px-2.5 py-1.5 text-xs rounded-lg tab-active transition">
+          📱 접은화면
+        </button>
+        <button type="button" id="btn-mode-unfolded" onclick="setScreenMode('unfolded')" class="px-2.5 py-1.5 text-xs rounded-lg bg-[var(--secondary)] text-[var(--secondary-foreground)] transition">
+          📖 펼친화면
+        </button>
+      </div>
+    </div>
+
+    <!-- Active Simulation Mode Warning Banner -->
+    <div id="sim-active-banner" class="hidden bg-[var(--card)] border-2 border-[var(--warning)] rounded-xl p-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+      <div class="flex items-center gap-2">
+        <span class="px-2 py-0.5 rounded bg-[var(--warning)] text-black font-bold">🧪 가상 시뮬레이션 미리보기 중</span>
+        <span>원장님의 <b>실제 병원 데이터는 안전하게 별도 보관</b>되어 있습니다.</span>
+      </div>
+      <button type="button" onclick="restoreRealDataFromSim()" class="px-3 py-1.5 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] font-bold">
+        ↩️ 실제 병원 데이터로 즉시 복귀
+      </button>
+    </div>
+
+    <!-- PANEL 1: ⚡ 실시간 문자 자동연동 & 엣지케이스 검증기 -->
+    <div id="top-panel-sms" class="bg-[var(--card)] border-2 border-[var(--success)] rounded-xl p-4 space-y-3">
+      <div class="flex items-center justify-between gap-2">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-bold px-2 py-0.5 rounded bg-[var(--success)] text-black">파서 6대 버그 수정완료</span>
+            <span id="sim-click-count" class="text-xs font-mono text-[var(--muted-foreground)]">누적 수신 테스트: 0건</span>
+          </div>
+          <h2 class="text-sm font-bold mt-1">📲 문자 파서 검증기 (검증 보고서에서 지적된 까다로운 문자까지 정확히 처리합니다)</h2>
+        </div>
+        <div class="flex gap-1.5 shrink-0">
+          <button type="button" onclick="resetDemoData()" class="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-[var(--secondary)] hover:opacity-80">
+            🔄 초기화
+          </button>
+          <button type="button" onclick="switchTopPanel('none')" class="px-2 py-1.5 text-xs text-[var(--muted-foreground)] hover:underline">
+            ▲ 접기
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2 text-xs">
+        <button type="button" onclick="sendTestSms('[우리은행] 11/16 입금 4,500,000원 갤럭시아머니트리 잔액 56,680,000원')" class="p-2.5 rounded-lg bg-[var(--secondary)] hover:border-[var(--primary)] border border-[var(--border)] text-left transition active:scale-95">
+          <div class="font-bold text-[var(--success)]">① 🟦 우리 갤럭시아 입금</div>
+          <div class="text-[var(--muted-foreground)] mt-0.5">+450만 & 잔액동기화</div>
+        </button>
+        <button type="button" onclick="sendTestSms('[우리은행] 11/16 입금 3,200,000원 하나카드')" class="p-2.5 rounded-lg bg-[var(--secondary)] hover:border-[var(--primary)] border border-[var(--border)] text-left transition active:scale-95">
+          <div class="font-bold text-[var(--success)]">② 🔍 '하나카드' 입금 검증</div>
+          <div class="text-[var(--muted-foreground)] mt-0.5">하나은행 오분류 방지!</div>
+        </button>
+        <button type="button" onclick="sendTestSms('[신한카드] 1234 승인 50,000원 일시불 스타벅스')" class="p-2.5 rounded-lg bg-[var(--secondary)] hover:border-[var(--primary)] border border-[var(--border)] text-left transition active:scale-95">
+          <div class="font-bold text-[var(--warning)]">③ 🔍 카드번호 1234 검증</div>
+          <div class="text-[var(--muted-foreground)] mt-0.5">1234 무시·5만 원 정확인식!</div>
+        </button>
+        <button type="button" onclick="sendTestSms('[경남BC] 승인취소 1,850,000원 (주)블루메디칼')" class="p-2.5 rounded-lg bg-[var(--secondary)] hover:border-[var(--primary)] border border-[var(--border)] text-left transition active:scale-95">
+          <div class="font-bold text-[var(--primary)]">④ 🔍 카드 승인취소 검증</div>
+          <div class="text-[var(--muted-foreground)] mt-0.5">-185만 지출 차감 처리!</div>
+        </button>
+        <button type="button" onclick="sendTestSms('[하나은행] 11/16 입금 880,000원 최수진')" class="p-2.5 rounded-lg bg-[var(--secondary)] hover:border-[var(--primary)] border border-[var(--border)] text-left transition active:scale-95">
+          <div class="font-bold text-[var(--success)]">⑤ 🟩 고객입금 실명마스킹</div>
+          <div class="text-[var(--muted-foreground)] mt-0.5">최수진 ➔ 최*진 자동보호</div>
+        </button>
+        <button type="button" onclick="sendTestSms('[하나은행] 11/16 출금 5,000,000원 우리은행집금')" class="p-2.5 rounded-lg bg-[var(--secondary)] hover:border-[var(--primary)] border border-[var(--border)] text-left transition active:scale-95">
+          <div class="font-bold">⑥ 🔄 내부이체 단건 처리</div>
+          <div class="text-[var(--muted-foreground)] mt-0.5">해당 은행만 이동·매출제외</div>
+        </button>
+      </div>
+
+      <!-- LIVE SCOREBOARD STRIP -->
+      <div id="live-scoreboard" class="grid grid-cols-2 md:grid-cols-5 gap-2 p-2.5 rounded-xl bg-[var(--background)] border border-[var(--border)] text-xs">
+        <div id="sb-box-woori" class="p-2 rounded-lg">
+          <div class="text-[var(--muted-foreground)]">🟦 우리은행 잔액</div>
+          <div id="sb-woori" class="font-mono font-bold text-sm mt-0.5">52,180,000원</div>
+        </div>
+        <div id="sb-box-hana" class="p-2 rounded-lg">
+          <div class="text-[var(--muted-foreground)]">🟩 하나은행 잔액</div>
+          <div id="sb-hana" class="font-mono font-bold text-sm mt-0.5">18,900,000원</div>
+        </div>
+        <div id="sb-box-kyongnam" class="p-2 rounded-lg">
+          <div class="text-[var(--muted-foreground)]">🟧 경남은행 잔액</div>
+          <div id="sb-kyongnam" class="font-mono font-bold text-sm mt-0.5">13,440,000원</div>
+        </div>
+        <div id="sb-box-card" class="p-2 rounded-lg">
+          <div class="text-[var(--muted-foreground)]">💳 미출금 카드누적</div>
+          <div id="sb-card" class="font-mono font-bold text-sm mt-0.5 text-[var(--warning)]">18,640,000원</div>
+        </div>
+        <div id="sb-box-profit" class="p-2 rounded-lg col-span-2 md:col-span-1 border border-[var(--primary)]">
+          <div class="font-semibold">🏆 11월 실질 순이익</div>
+          <div id="sb-profit" class="font-mono font-bold text-sm mt-0.5 text-[var(--success)]">+16,166,000원</div>
+        </div>
+      </div>
+
+      <div class="flex flex-col sm:flex-row gap-2">
+        <input id="custom-sms-input" type="text" value="[우리은행] 11/16 입금 3,200,000원 하나카드" placeholder="실제 은행/카드 문자 내용을 붙여넣어 테스트해 보세요" class="flex-1 bg-[var(--background)] border border-[var(--border)] rounded-lg px-3 py-1.5 text-xs" />
+        <button type="button" onclick="sendCustomSms()" class="px-4 py-1.5 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] text-xs font-bold shrink-0">
+          📩 이 문자 수신 시뮬레이션
+        </button>
+      </div>
+      <div id="sim-toast" class="hidden p-2.5 rounded-lg bg-[var(--secondary)] text-xs font-semibold text-[var(--success)]"></div>
+    </div>
+
+    <!-- PANEL 2: 🧪 경영 손익 시뮬레이터 & ⚙️ 초기값 설정 창 -->
+    <div id="top-panel-whatif" class="bg-[var(--card)] border-2 border-[var(--warning)] rounded-xl p-4 space-y-4 hidden">
+      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--card-border)] pb-3">
+        <div class="flex items-center gap-2">
+          <button type="button" id="subtab-btn-sim" onclick="switchWhatIfTab('sim')" class="px-3 py-1.5 text-xs font-bold rounded-lg tab-active">
+            🧪 비용절감 · 매출증가 손익 시뮬레이터
+          </button>
+          <button type="button" id="subtab-btn-init" onclick="switchWhatIfTab('init')" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-[var(--secondary)] text-[var(--secondary-foreground)]">
+            ⚙️ 우리 병원 상세 초기값 설정 (PG비율·세율 포함)
+          </button>
+        </div>
+        <button type="button" onclick="switchTopPanel('none')" class="text-xs text-[var(--muted-foreground)] hover:underline">
+          ▲ 패널 접기
+        </button>
+      </div>
+
+      <div id="whatif-sub-sim" class="space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <p class="text-xs text-[var(--muted-foreground)]">
+            슬라이더를 조절해 시뮬레이션해 보세요. <b>[가상 미리보기 적용]</b>을 눌러도 원본 실데이터는 별도 보존되어 언제든 복귀할 수 있습니다.
+          </p>
+          <div class="flex gap-1.5 text-xs">
+            <button type="button" onclick="applySimPreset(-15, -20, 0, 0)" class="px-2.5 py-1 rounded bg-[var(--secondary)] hover:opacity-80 font-medium">
+              💡 재료비15%·광고20% 절감시
+            </button>
+            <button type="button" onclick="applySimPreset(0, 15, 20, 0)" class="px-2.5 py-1 rounded bg-[var(--secondary)] hover:opacity-80 font-medium">
+              🚀 광고15% 증액 ➔ 매출20% 상승시
+            </button>
+            <button type="button" onclick="applySimPreset(0, 0, 0, 0)" class="px-2.5 py-1 rounded bg-[var(--secondary)] hover:opacity-80">
+              🔄 0% 초기화
+            </button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+          <div class="p-3 rounded-xl bg-[var(--background)] border border-[var(--border)] space-y-2">
+            <div class="flex justify-between items-center">
+              <span class="font-bold">📈 ① 월 매출 증감률</span>
+              <span id="sim-lbl-rev" class="font-mono font-bold text-[var(--primary)]">0%</span>
+            </div>
+            <input id="sim-slider-rev" type="range" min="-30" max="50" step="5" value="0" oninput="runWhatIfSim()" class="w-full accent-[var(--primary)]" />
+            <div class="flex justify-between text-[var(--muted-foreground)]">
+              <span>-30%</span>
+              <span id="sim-amt-rev" class="font-mono">9,640만 원</span>
+              <span>+50%</span>
+            </div>
+          </div>
+
+          <div class="p-3 rounded-xl bg-[var(--background)] border border-[var(--border)] space-y-2">
+            <div class="flex justify-between items-center">
+              <span class="font-bold">💉 ② 재료비 절감/증가</span>
+              <span id="sim-lbl-supply" class="font-mono font-bold text-[var(--success)]">0%</span>
+            </div>
+            <input id="sim-slider-supply" type="range" min="-40" max="40" step="5" value="0" oninput="runWhatIfSim()" class="w-full accent-[var(--primary)]" />
+            <div class="flex justify-between text-[var(--muted-foreground)]">
+              <span>-40% 절감</span>
+              <span id="sim-amt-supply" class="font-mono">1,882만 원</span>
+              <span>+40% 증가</span>
+            </div>
+          </div>
+
+          <div class="p-3 rounded-xl bg-[var(--background)] border border-[var(--border)] space-y-2">
+            <div class="flex justify-between items-center">
+              <span class="font-bold">📢 ③ 마케팅·광고비 조정</span>
+              <span id="sim-lbl-mkt" class="font-mono font-bold text-[var(--warning)]">0%</span>
+            </div>
+            <input id="sim-slider-mkt" type="range" min="-50" max="100" step="5" value="0" oninput="runWhatIfSim()" class="w-full accent-[var(--primary)]" />
+            <div class="flex justify-between text-[var(--muted-foreground)]">
+              <span>-50% 절감</span>
+              <span id="sim-amt-mkt" class="font-mono">780만 원</span>
+              <span>+100% 증액</span>
+            </div>
+          </div>
+
+          <div class="p-3 rounded-xl bg-[var(--background)] border border-[var(--border)] space-y-2">
+            <div class="flex justify-between items-center">
+              <span class="font-bold">👥 ④ 인건비·고정비 증감</span>
+              <span id="sim-lbl-fixed" class="font-mono font-bold">0만 원</span>
+            </div>
+            <input id="sim-slider-fixed" type="range" min="-1000" max="1500" step="50" value="0" oninput="runWhatIfSim()" class="w-full accent-[var(--primary)]" />
+            <div class="flex justify-between text-[var(--muted-foreground)]">
+              <span>-1,000만</span>
+              <span id="sim-amt-fixed" class="font-mono">4,540만 원</span>
+              <span>+1,500만</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-3 p-3.5 rounded-xl bg-[var(--secondary)] text-xs">
+          <div>
+            <div class="text-[var(--muted-foreground)]">현재 기준 월 실질순이익</div>
+            <div id="sim-base-profit" class="text-base font-bold font-mono mt-0.5">+16,166,000원</div>
+            <div id="sim-base-margin" class="text-[var(--muted-foreground)]">순이익률 16.8%</div>
+          </div>
+
+          <div>
+            <div class="font-bold">✨ 시뮬레이션 후 월 순이익</div>
+            <div id="sim-new-profit" class="text-lg font-bold font-mono text-[var(--success)] mt-0.5">+16,166,000원</div>
+            <div id="sim-new-margin" class="text-[var(--muted-foreground)]">예상 순이익률 16.8%</div>
+          </div>
+
+          <div>
+            <div class="font-bold">💰 월간 / 연간(12개월) 손익 효과</div>
+            <div id="sim-diff-month" class="text-base font-bold font-mono text-[var(--primary)] mt-0.5">월 ±0원</div>
+            <div id="sim-diff-year" class="font-semibold text-[var(--success)]">연간(1년) 누적 ±0원</div>
+          </div>
+
+          <div class="flex flex-col justify-between">
+            <div>
+              <div class="text-[var(--muted-foreground)]">🎯 손익분기점(BEP · 공헌이익률 기준)</div>
+              <div id="sim-bep-change" class="font-mono font-bold mt-0.5">7,732만 원</div>
+            </div>
+            <button type="button" onclick="commitSimulationToDashboard()" class="mt-2 py-1.5 px-3 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] font-bold text-center">
+              📊 가상 미리보기 적용 (원본보존)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div id="whatif-sub-init" class="space-y-3 hidden text-xs">
+        <p class="text-[var(--muted-foreground)]">
+          검증에서 지적된 <b>임의 고정값(받을 정산금, 20일 현금재료비, 세금 적립률, 내부이체 키워드)</b>까지 모두 원장님 병원 실정에 맞게 설정하실 수 있습니다.
+        </p>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+          <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+            <label class="block text-[var(--muted-foreground)] mb-1">🟦 우리은행 현재 잔액 (원)</label>
+            <input id="inp-woori" type="number" step="100000" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2 py-1 font-mono font-bold" />
+          </div>
+          <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+            <label class="block text-[var(--muted-foreground)] mb-1">🟩 하나은행 현재 잔액 (원)</label>
+            <input id="inp-hana" type="number" step="100000" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2 py-1 font-mono font-bold" />
+          </div>
+          <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+            <label class="block text-[var(--muted-foreground)] mb-1">🟧 경남은행 현재 잔액 (원)</label>
+            <input id="inp-kyongnam" type="number" step="100000" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2 py-1 font-mono font-bold" />
+          </div>
+          <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+            <label class="block text-[var(--muted-foreground)] mb-1">🗓️ 지난 21일 3개통장 총잔액 (원)</label>
+            <input id="inp-day21-base" type="number" step="100000" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2 py-1 font-mono font-bold" />
+          </div>
+
+          <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+            <label class="block text-[var(--muted-foreground)] mb-1">👥 5일 급여 + 장비리스료 (원)</label>
+            <input id="inp-payroll" type="number" step="100000" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2 py-1 font-mono font-bold" />
+          </div>
+          <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+            <label class="block text-[var(--muted-foreground)] mb-1">🏢 10일 세금·4대보험·임대료 (원)</label>
+            <input id="inp-taxins" type="number" step="100000" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2 py-1 font-mono font-bold" />
+          </div>
+          <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+            <label class="block text-[var(--muted-foreground)] mb-1">💳 14일 일반카드 이달 누적 (원)</label>
+            <input id="inp-card14" type="number" step="100000" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2 py-1 font-mono font-bold" />
+          </div>
+          <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+            <label class="block text-[var(--muted-foreground)] mb-1">💳 20일 경남카드 이달 누적 (원)</label>
+            <input id="inp-card20" type="number" step="100000" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2 py-1 font-mono font-bold" />
+          </div>
+
+          <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+            <label class="block text-[var(--muted-foreground)] mb-1">💉 20일 재료비 현금이체 예정액 (원)</label>
+            <input id="inp-supply-cash" type="number" step="100000" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2 py-1 font-mono font-bold" />
+          </div>
+          <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+            <label class="block text-[var(--muted-foreground)] mb-1">➕ 받을 정산금 대기액 합계 (원)</label>
+            <input id="inp-pending-in" type="number" step="100000" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2 py-1 font-mono font-bold" />
+          </div>
+          <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+            <label class="block text-[var(--muted-foreground)] mb-1">⚖️ 월 세금적립률 (부가·종소세 %)</label>
+            <input id="inp-tax-rate" type="number" step="0.5" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2 py-1 font-mono font-bold" />
+          </div>
+          <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+            <label class="block text-[var(--muted-foreground)] mb-1">🔄 내부이체 인식 키워드 (쉼표구분)</label>
+            <input id="inp-internal-kw" type="text" placeholder="예: 홍길동,우리스킨,집금" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2 py-1 font-bold" />
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between pt-1">
+          <span id="init-save-msg" class="text-[var(--success)] font-bold"></span>
+          <div class="flex gap-2">
+            <button type="button" onclick="resetDemoData()" class="px-3 py-1.5 rounded-lg bg-[var(--secondary)] font-semibold">
+              기본 샘플값 복원
+            </button>
+            <button type="button" onclick="saveInitialSettings()" class="px-4 py-1.5 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] font-bold">
+              💾 설정 저장 및 대시보드 즉시 반영
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PANEL 3: ☁️ 갤럭시 폴드5 양방향 클라우드 연동 & 보안 토큰 센터 -->
+    <div id="top-panel-cloud" class="bg-[var(--card)] border-2 border-[var(--primary)] rounded-xl p-4 space-y-3 hidden text-xs">
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="px-2 py-0.5 rounded bg-[var(--primary)] text-[var(--primary-foreground)] font-bold">양방향 동기화 & 비밀토큰 보안 적용</span>
+          <h2 class="text-sm font-bold mt-1">☁️ 갤럭시 폴드5 ➔ 구글시트 웹훅 ➔ 대시보드 실시간 불러오기</h2>
+        </div>
+        <button type="button" onclick="switchTopPanel('none')" class="text-[var(--muted-foreground)] hover:underline">▲ 닫기</button>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div class="p-3 rounded-xl bg-[var(--background)] border border-[var(--border)] space-y-1">
+          <div class="font-bold text-[var(--primary)]">1. 구글시트 웹훅 배포 (보안토큰 포함)</div>
+          <p class="text-[var(--muted-foreground)]">
+            <code>cloud-deploy/google_sheets_webhook.gs</code>를 구글 시트 Apps Script에 붙여넣고 웹 앱으로 배포하세요. 비밀 토큰(기본값: <code>clinic-21</code>)이 없는 외부 접근은 모두 차단됩니다.
+          </p>
+        </div>
+
+        <div class="p-3 rounded-xl bg-[var(--background)] border border-[var(--border)] space-y-1">
+          <div class="font-bold text-[var(--success)]">2. 폴드5 SMS Forwarder 설정 (화이트리스트)</div>
+          <p class="text-[var(--muted-foreground)]">
+            OTP·인증번호 유출 방지를 위해 발신번호를 <b>우리은행(1588-5000), 하나은행(1599-1111), 경남은행(1600-8585), 카드사 번호</b>로만 지정하고 웹훅 URL로 전송하세요.
+          </p>
+        </div>
+
+        <div class="p-3 rounded-xl bg-[var(--background)] border border-[var(--border)] space-y-1">
+          <div class="font-bold text-[var(--warning)]">3. 대시보드에서 최신 문자 자동 불러오기</div>
+          <p class="text-[var(--muted-foreground)]">
+            아래에 웹훅 URL과 비밀 토큰을 넣고 <b>[🔄 지금 시트에서 불러오기]</b>를 누르면 폰에서 저장된 문자를 대시보드가 읽어와 잔액과 손익을 자동 갱신합니다.
+          </p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 pt-1">
+        <input id="cloud-webhook-url" type="text" placeholder="구글 웹앱 URL (https://script.google.com/macros/s/.../exec)" class="sm:col-span-2 bg-[var(--background)] border border-[var(--border)] rounded-lg px-3 py-1.5" />
+        <input id="cloud-secret-token" type="password" value="clinic-21" placeholder="비밀 토큰 (예: clinic-21)" class="bg-[var(--background)] border border-[var(--border)] rounded-lg px-3 py-1.5 font-mono" />
+        <button type="button" onclick="syncFromCloudWebhook()" class="px-3 py-1.5 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] font-bold">
+          🔄 저장 & 지금 시트에서 불러오기
+        </button>
+      </div>
+      <div id="cloud-save-msg" class="hidden font-semibold text-[var(--success)]"></div>
+    </div>
+
+    <!-- Main Dashboard Wrapper -->
+    <div id="dashboard-wrapper" class="is-folded space-y-3.5">
+
+      <div class="flex items-center justify-between px-1">
+        <div>
+          <div class="text-xs text-[var(--muted-foreground)]">우리·하나·경남 실시간 연동</div>
+          <h1 class="text-base font-bold">🏥 피부과 자금·손익 관제</h1>
+        </div>
+        <span id="live-status-badge" class="px-2 py-0.5 text-xs font-semibold rounded-full bg-[var(--secondary)] text-[var(--success)]">● 파서검증 완료</span>
+      </div>
+
+      <div class="grid grid-cols-5 gap-1 bg-[var(--card)] border border-[var(--border)] p-1 rounded-xl">
+        <button type="button" id="tab-btn-pnl" onclick="switchTab('pnl')" class="py-2 px-1 rounded-lg text-xs text-center transition tab-active">
+          <div class="text-sm">🏆</div>
+          <div class="font-bold mt-0.5">손익</div>
+          <div class="only-unfolded text-xs opacity-80 font-normal">21일 공식기준</div>
+        </button>
+        <button type="button" id="tab-btn-snapshot" onclick="switchTab('snapshot')" class="py-2 px-1 rounded-lg text-xs text-center transition hover:bg-[var(--secondary)]">
+          <div class="text-sm">📍</div>
+          <div class="font-bold mt-0.5">시점</div>
+          <div class="only-unfolded text-xs opacity-80 font-normal">잔액·가용현금</div>
+        </button>
+        <button type="button" id="tab-btn-credit" onclick="switchTab('credit')" class="py-2 px-1 rounded-lg text-xs text-center transition hover:bg-[var(--secondary)]">
+          <div class="text-sm">💳</div>
+          <div class="font-bold mt-0.5">카드</div>
+          <div class="only-unfolded text-xs opacity-80 font-normal">결제일·출금일</div>
+        </button>
+        <button type="button" id="tab-btn-period" onclick="switchTab('period')" class="py-2 px-1 rounded-lg text-xs text-center transition hover:bg-[var(--secondary)]">
+          <div class="text-sm">📅</div>
+          <div class="font-bold mt-0.5">기간</div>
+          <div class="only-unfolded text-xs opacity-80 font-normal">유입·유출추이</div>
+        </button>
+        <button type="button" id="tab-btn-category" onclick="switchTab('category')" class="py-2 px-1 rounded-lg text-xs text-center transition hover:bg-[var(--secondary)]">
+          <div class="text-sm">📊</div>
+          <div class="font-bold mt-0.5">항목</div>
+          <div class="only-unfolded text-xs opacity-80 font-normal">PG분해·지출</div>
+        </button>
+      </div>
+
+      <!-- TAB 1: 🏆 손익 판정 -->
+      <div id="tab-pnl" class="space-y-3.5">
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold">🚩 매월 21일 공식 손익 리포트</span>
+            <span class="text-xs text-[var(--muted-foreground)]">20일 현금재료비까지 모두 반영</span>
+          </div>
+          <select id="pnl-month-select" onchange="renderAll()" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs font-semibold">
+            <option value="nov">당월 실시간 누적 (21일 공식 확정 기준 · 실시간 반영)</option>
+            <option value="oct">전월 공식 마감 (10/21 정산확정 완료)</option>
+            <option value="sep">전전월 공식 마감 (09/21 정산확정 완료)</option>
+          </select>
+        </div>
+
+        <div id="pnl-verdict-card" class="bg-[var(--card)] border-2 border-[var(--primary)] rounded-xl p-3.5 space-y-3">
+          <div class="flex items-center justify-between border-b border-[var(--card-border)] pb-2.5">
+            <div>
+              <div id="pnl-title-badge" class="text-xs text-[var(--muted-foreground)]">당월 실시간 손익 (현금재료비 800만 포함)</div>
+              <div class="flex items-center gap-2 mt-1">
+                <span id="pnl-verdict-tag" class="px-2 py-0.5 text-xs font-bold rounded bg-[var(--success)] text-black">흑자</span>
+                <span id="pnl-net-profit" class="text-xl font-bold font-mono text-[var(--success)]">+16,166,000원</span>
+              </div>
+            </div>
+            <div class="text-right">
+              <div class="text-xs text-[var(--muted-foreground)]">실질 순이익률</div>
+              <div id="pnl-margin" class="text-lg font-bold font-mono">16.8%</div>
+            </div>
+          </div>
+
+          <div class="p-2.5 rounded-lg bg-[var(--secondary)] flex items-center justify-between text-xs">
+            <div>
+              <span class="font-bold">🗓️ 21일 통장잔액 비교</span>
+              <div id="pnl-day21-sub" class="text-[var(--muted-foreground)] mt-0.5">전월21일(8,120만) ➔ 현재(8,452만)</div>
+            </div>
+            <div class="text-right">
+              <div class="text-[var(--muted-foreground)]">21일 대비 현금증감</div>
+              <div id="pnl-day21-diff" class="font-mono font-bold text-[var(--primary)]">+3,320,000원</div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 md:grid-cols-4 fold-cols-2 gap-2 text-xs">
+            <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+              <div class="text-[var(--muted-foreground)]">① 정산 순매출</div>
+              <div id="pnl-rev" class="font-mono font-bold text-sm mt-0.5">+9,640만</div>
+            </div>
+            <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+              <div class="text-[var(--muted-foreground)]">② 5·10일 고정비</div>
+              <div id="pnl-cost" class="font-mono font-bold text-sm mt-0.5 text-[var(--error)]">-4,540만</div>
+            </div>
+            <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+              <div class="text-[var(--muted-foreground)]">③ 카드+현금재료비</div>
+              <div id="pnl-mkt" class="font-mono font-bold text-sm mt-0.5 text-[var(--error)]">-2,664만</div>
+            </div>
+            <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+              <div class="text-[var(--muted-foreground)]">④ 세금 적립충당</div>
+              <div id="pnl-tax" class="font-mono font-bold text-sm mt-0.5 text-[var(--warning)]">-819만</div>
+            </div>
+          </div>
+
+          <div class="pt-1 space-y-1">
+            <div class="flex justify-between text-xs">
+              <span class="font-semibold">🎯 손익분기점 (<span id="bep-target-lbl">7,732만</span> · 공헌이익 공식)</span>
+              <span id="bep-pct" class="font-mono font-bold text-[var(--success)]">100% 돌파완료</span>
+            </div>
+            <div class="w-full h-2 bg-[var(--secondary)] rounded-full overflow-hidden">
+              <div id="bep-bar" class="h-full bg-[var(--success)] transition-all duration-500" style="width: 100%"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3.5 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <h3 class="font-bold text-xs">🔄 5·10·14·20일 지출 & 21일 손익 산출 명세</h3>
+            <span class="text-xs text-[var(--muted-foreground)]">누락비용 보정완료</span>
+          </div>
+
+          <div class="divide-y divide-[var(--card-border)] text-xs">
+            <div class="py-2 flex items-center justify-between gap-2">
+              <div class="truncate">
+                <span class="font-semibold">➕ 총 정산수입</span>
+                <span class="text-[var(--muted-foreground)] ml-1">(우리·하나·경남)</span>
+              </div>
+              <span id="row-pnl-rev" class="font-mono font-bold text-[var(--success)] shrink-0">+96,400,000원</span>
+            </div>
+            <div class="py-2 flex items-center justify-between gap-2">
+              <div class="truncate">
+                <span class="font-semibold">➖ 급여·리스료</span>
+                <span class="text-[var(--muted-foreground)] ml-1">(5일 출금)</span>
+              </div>
+              <span id="row-pnl-payroll" class="font-mono font-bold text-[var(--error)] shrink-0">-28,500,000원</span>
+            </div>
+            <div class="py-2 flex items-center justify-between gap-2">
+              <div class="truncate">
+                <span class="font-semibold">➖ 세금·4대보험·임대</span>
+                <span class="text-[var(--muted-foreground)] ml-1">(10일 출금)</span>
+              </div>
+              <span id="row-pnl-taxins" class="font-mono font-bold text-[var(--error)] shrink-0">-16,900,000원</span>
+            </div>
+            <div class="py-2 flex items-center justify-between gap-2">
+              <div class="truncate">
+                <span class="font-semibold">➖ 1차 일반카드</span>
+                <span class="text-[var(--muted-foreground)] ml-1">(14일 출금분)</span>
+              </div>
+              <span id="row-pnl-card14" class="font-mono font-bold text-[var(--error)] shrink-0">-8,920,000원</span>
+            </div>
+            <div class="py-2 flex items-center justify-between gap-2">
+              <div class="truncate">
+                <span class="font-semibold">➖ 2차 경남카드</span>
+                <span class="text-[var(--muted-foreground)] ml-1">(20일 출금분)</span>
+              </div>
+              <span id="row-pnl-card20" class="font-mono font-bold text-[var(--error)] shrink-0">-9,720,000원</span>
+            </div>
+            <div class="py-2 flex items-center justify-between gap-2">
+              <div class="truncate">
+                <span class="font-semibold">➖ 재료비 현금이체</span>
+                <span class="text-[var(--muted-foreground)] ml-1">(20일 이체분)</span>
+              </div>
+              <span id="row-pnl-supplycash" class="font-mono font-bold text-[var(--error)] shrink-0">-8,000,000원</span>
+            </div>
+            <div class="py-2 flex items-center justify-between gap-2">
+              <div class="truncate">
+                <span class="font-semibold">➖ 부가·종소세 적립</span>
+                <span class="text-[var(--muted-foreground)] ml-1">(<span id="lbl-tax-rate">8.5</span>% 충당)</span>
+              </div>
+              <span id="row-pnl-taxres" class="font-mono font-bold text-[var(--warning)] shrink-0">-8,194,000원</span>
+            </div>
+            <div class="pt-2.5 flex items-center justify-between gap-2 font-bold">
+              <span>🚩 21일 기준 실질 순이익</span>
+              <span id="row-pnl-net" class="font-mono text-sm text-[var(--success)] shrink-0">+16,166,000원</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: 📍 시점 -->
+      <div id="tab-snapshot" class="space-y-3.5 hidden">
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold">⏱️ 조회 기준 시점</span>
+            <span id="snap-updated-at" class="text-xs text-[var(--muted-foreground)]">실시간 문자 잔액</span>
+          </div>
+          <select id="snapshot-select" onchange="renderAll()" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs font-semibold">
+            <option value="now">오늘 현재 실시간 (문자 잔액 자동동기화 반영)</option>
+            <option value="day21_oct">전월 21일 공식 기준일 (모든 출금 완료 직후)</option>
+            <option value="day21_sep">전전월 21일 공식 기준일 (모든 출금 완료 직후)</option>
+          </select>
+        </div>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 fold-cols-2 gap-2.5">
+          <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3">
+            <div class="text-xs text-[var(--muted-foreground)]">① 3개통장 총잔액</div>
+            <div id="snap-total-bank" class="text-base font-bold font-mono mt-1">8,452만 원</div>
+            <div class="text-xs text-[var(--muted-foreground)] mt-0.5">우리+하나+경남</div>
+          </div>
+          <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3">
+            <div class="text-xs text-[var(--muted-foreground)]">➕ ② 받을 정산금</div>
+            <div id="snap-pending-in" class="text-base font-bold font-mono mt-1 text-[var(--success)]">+1,945만 원</div>
+            <div class="text-xs text-[var(--muted-foreground)] mt-0.5">입금시 자동차감</div>
+          </div>
+          <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3 cursor-pointer" onclick="switchTab('credit')">
+            <div class="text-xs text-[var(--muted-foreground)]">➖ ③ 나갈 카드·재료</div>
+            <div id="snap-pending-card" class="text-base font-bold font-mono mt-1 text-[var(--error)]">-3,804만 원</div>
+            <div class="text-xs text-[var(--link)] mt-0.5">14·20일 예정 ➔</div>
+          </div>
+          <div class="bg-[var(--card)] border-2 border-[var(--primary)] rounded-xl p-3">
+            <div class="text-xs font-bold">💡 ④ 실질 가용현금</div>
+            <div id="snap-real-cash" class="text-base font-bold font-mono mt-1">6,593만 원</div>
+            <div class="text-xs text-[var(--muted-foreground)] mt-0.5">① + ② - ③ 여유액</div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 fold-cols-1 gap-3">
+          <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3.5 space-y-2">
+            <div class="flex items-center justify-between">
+              <div>
+                <span class="text-xs px-1.5 py-0.5 rounded bg-[var(--secondary)] font-semibold">PG·카드입금 / 전체출금</span>
+                <h3 class="font-bold text-sm mt-1">🟦 우리은행</h3>
+              </div>
+              <div id="snap-woori" class="text-base font-bold font-mono">52,180,000원</div>
+            </div>
+            <div class="p-2 rounded-lg bg-[var(--secondary)] text-xs flex items-center justify-between">
+              <span>⚠️ 20일 경남카드·재료비 출금예정</span>
+              <span id="snap-woori-upcoming" class="font-mono font-bold text-[var(--error)]">-19,400,000원</span>
+            </div>
+          </div>
+
+          <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3.5 space-y-2">
+            <div class="flex items-center justify-between">
+              <div>
+                <span class="text-xs px-1.5 py-0.5 rounded bg-[var(--secondary)] font-semibold">고객 현금입금 전용</span>
+                <h3 class="font-bold text-sm mt-1">🟩 하나은행</h3>
+              </div>
+              <div id="snap-hana" class="text-base font-bold font-mono">18,900,000원</div>
+            </div>
+            <div class="p-2 rounded-lg bg-[var(--secondary)] text-xs flex items-center justify-between">
+              <span>💵 고객 실명 자동 마스킹(김*영) 적용중</span>
+              <span class="font-mono font-bold text-[var(--success)]">개인정보 보호</span>
+            </div>
+          </div>
+
+          <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3.5 space-y-2">
+            <div class="flex items-center justify-between">
+              <div>
+                <span class="text-xs px-1.5 py-0.5 rounded bg-[var(--secondary)] font-semibold">강남언니·언니가이드</span>
+                <h3 class="font-bold text-sm mt-1">🟧 경남은행</h3>
+              </div>
+              <div id="snap-kyongnam" class="text-base font-bold font-mono">13,440,000원</div>
+            </div>
+            <div class="p-2 rounded-lg bg-[var(--secondary)] text-xs flex items-center justify-between">
+              <span>💄 미용 플랫폼 정산 입금계좌</span>
+              <span class="font-mono font-bold text-[var(--success)]">실시간 연동</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3: 💳 카드 -->
+      <div id="tab-credit" class="space-y-3.5 hidden">
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3 space-y-1">
+          <div class="flex items-center justify-between">
+            <h2 class="font-bold text-xs">💳 카드 결제시점(긁은 날) & 출금일(14·20일)</h2>
+            <span class="text-xs text-[var(--muted-foreground)]">승인·취소 모두 반영</span>
+          </div>
+          <p class="text-xs text-[var(--muted-foreground)]">카드번호 끝 4자리 오인식 방지 및 승인취소(-) 자동 차감이 적용되어 있습니다.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 fold-cols-1 gap-3">
+          <div class="bg-[var(--card)] border-2 border-[var(--warning)] rounded-xl p-3.5 space-y-1.5">
+            <div class="flex items-center justify-between text-xs">
+              <span class="px-2 py-0.5 rounded bg-[var(--warning)] text-black font-bold">매월 20일 출금</span>
+              <span class="text-[var(--muted-foreground)]">전월 1~말일분</span>
+            </div>
+            <div class="flex items-center justify-between pt-1">
+              <span class="font-bold text-sm">경남은행 카드 (이달 누적)</span>
+              <span id="card20-cur-swipes" class="font-mono font-bold text-base text-[var(--warning)]">9,720,000원</span>
+            </div>
+            <div class="text-xs text-[var(--muted-foreground)]">당월 20일 확정 출금예정액: <b class="font-mono text-[var(--error)]">11,400,000원</b></div>
+          </div>
+
+          <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3.5 space-y-1.5">
+            <div class="flex items-center justify-between text-xs">
+              <span class="px-2 py-0.5 rounded bg-[var(--secondary)] font-semibold">매월 14일 출금</span>
+              <span class="text-[var(--muted-foreground)]">전월 1~말일분</span>
+            </div>
+            <div class="flex items-center justify-between pt-1">
+              <span class="font-bold text-sm">1차 일반카드 (이달 누적)</span>
+              <span id="card14-cur-swipes" class="font-mono font-bold text-base">8,920,000원</span>
+            </div>
+            <div class="text-xs text-[var(--muted-foreground)]">전월 사용분(1,480만 원)은 14일 출금완료</div>
+          </div>
+
+          <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3.5 space-y-1.5">
+            <div class="flex items-center justify-between text-xs">
+              <span class="px-2 py-0.5 rounded bg-[var(--secondary)] font-semibold">매월 20일 이체</span>
+              <span class="text-[var(--muted-foreground)]">거래처 현금결제</span>
+            </div>
+            <div class="flex items-center justify-between pt-1">
+              <span class="font-bold text-sm">20일 재료비 현금이체</span>
+              <span id="card-supply-cash-amt" class="font-mono font-bold text-base">8,000,000원</span>
+            </div>
+            <div class="text-xs text-[var(--muted-foreground)]">손익 계산(탭①)과 가용현금(탭②)에 모두 반영됨</div>
+          </div>
+        </div>
+
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3.5 space-y-2">
+          <div class="flex items-center justify-between">
+            <h3 class="font-bold text-xs">⚡ 최근 카드 승인·취소 실시간 내역 (통장 미출금)</h3>
+            <span id="card-total-unbilled" class="font-mono font-bold text-xs text-[var(--warning)]">이달 누적 18,640,000원</span>
+          </div>
+          <div id="card-swipe-list" class="divide-y divide-[var(--card-border)] text-xs"></div>
+        </div>
+      </div>
+
+      <!-- TAB 4: 📅 기간 -->
+      <div id="tab-period" class="space-y-3.5 hidden">
+        <div class="grid grid-cols-1 md:grid-cols-3 fold-cols-1 gap-2.5">
+          <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3.5 flex items-center justify-between">
+            <div>
+              <div class="text-xs text-[var(--muted-foreground)]">📥 기간 총 현금유입</div>
+              <div class="text-xs text-[var(--muted-foreground)]">우리+하나+경남 실입금</div>
+            </div>
+            <div id="period-in" class="text-lg font-bold font-mono text-[var(--success)]">+96,400,000원</div>
+          </div>
+
+          <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3.5 flex items-center justify-between">
+            <div>
+              <div class="text-xs text-[var(--muted-foreground)]">📤 기간 총 현금유출</div>
+              <div class="text-xs text-[var(--muted-foreground)]">우리은행 실출금 합계</div>
+            </div>
+            <div id="period-out" class="text-lg font-bold font-mono text-[var(--error)]">-60,200,000원</div>
+          </div>
+
+          <div class="bg-[var(--card)] border-2 border-[var(--primary)] rounded-xl p-3.5 flex items-center justify-between">
+            <div>
+              <div class="text-xs font-bold">📈 순현금흐름</div>
+              <div class="text-xs text-[var(--muted-foreground)]">내부이체 중복제외 완료</div>
+            </div>
+            <div id="period-net" class="text-lg font-bold font-mono">+36,200,000원</div>
+          </div>
+        </div>
+
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3.5 space-y-2">
+          <div class="flex items-center justify-between">
+            <h3 class="font-bold text-xs">📲 실시간 문자 자동분류 로그 (최신순)</h3>
+            <span class="text-xs text-[var(--muted-foreground)]">XSS방어 · 실명마스킹</span>
+          </div>
+          <div id="tx-log-list" class="divide-y divide-[var(--card-border)] text-xs"></div>
+        </div>
+      </div>
+
+      <!-- TAB 5: 📊 항목 -->
+      <div id="tab-category" class="space-y-3.5 hidden">
+        <div class="grid grid-cols-1 lg:grid-cols-2 fold-cols-1 gap-3">
+          <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3.5 space-y-2.5">
+            <div class="flex items-center justify-between border-b border-[var(--card-border)] pb-2">
+              <h3 class="font-bold text-xs">📥 수입 6대 항목 (갤럭시아PG 추정분해)</h3>
+              <span id="cat-in-total" class="font-mono font-bold text-xs">96,400,000원</span>
+            </div>
+            <div id="cat-in-bars" class="space-y-2 text-xs"></div>
+          </div>
+
+          <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3.5 space-y-2.5">
+            <div class="flex items-center justify-between border-b border-[var(--card-border)] pb-2">
+              <h3 class="font-bold text-xs">📤 지출 5대 항목 (우리출금 + 카드 + 현금재료비)</h3>
+              <span id="cat-out-total" class="font-mono font-bold text-xs">72,040,000원</span>
+            </div>
+            <div id="cat-out-bars" class="space-y-2 text-xs"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    const INITIAL_STATE = {
+      settings: {
+        officialCutoffDay: 21,
+        day21BaseBalance: 81200000,
+        pgSplitRatio: { card: 0.80, naver: 0.12, kakao: 0.08, feeRate: 0.028 },
+        taxReserveRate: 0.085,
+        internalKeywords: '집금,내통장,내부,피부과',
+        webhookUrl: '',
+        secretToken: 'clinic-21'
+      },
+      balances: {
+        woori: 52180000,
+        hana: 18900000,
+        kyongnam: 13440000,
+        updatedAt: '방금 전'
+      },
+      pendingInflowsTotal: 19450000,
+      cards: {
+        card14: { currentMonthSwipes: 8920000, confirmedNextWithdraw: 0 },
+        card20: { currentMonthSwipes: 9720000, confirmedNextWithdraw: 11400000 },
+        scheduledSupplyTransfer20: 8000000
+      },
+      inflowTotals: {
+        pgCard: 44200000,
+        wirelessCard: 16800000,
+        cashHana: 14500000,
+        platformKyongnam: 9840000,
+        naverPay: 6460000,
+        kakaoPay: 4600000
+      },
+      outflowTotals: {
+        payroll: 28500000,
+        taxInsRent: 16900000,
+        supplyCard: 7940000,
+        marketingCard: 7800000,
+        welfareOtherCard: 2900000
+      },
+      processedIds: [],
+      transactions: [
+        { id: '1', datetime: '11/16 11:15', type: 'BANK_IN', badge: '🟦 우리입금', title: '갤럭시아머니트리', sub: '카드 536만·N페이 80만·카카오 54만', amount: 6700000 },
+        { id: '2', datetime: '11/16 10:42', type: 'BANK_IN', badge: '🟩 하나입금', title: '박*현 고객님', sub: '시술비 계좌이체 (실명자동마스킹)', amount: 550000 },
+        { id: '3', datetime: '11/16 10:15', type: 'CARD_SWIPE', badge: '💳 1차카드', title: '메타(인스타) 광고비', sub: '아직 미출금 (14일 출금예정)', amount: 900000 },
+        { id: '4', datetime: '11/15 16:40', type: 'CARD_SWIPE', badge: '💳 경남카드', title: '(주)블루메디칼 소모품', sub: '아직 미출금 (20일 출금예정)', amount: 1850000 },
+        { id: '5', datetime: '11/15 14:10', type: 'BANK_IN', badge: '🟧 경남입금', title: '강남언니 정산금', sub: '플랫폼 정산 입금', amount: 1890000 },
+        { id: '6', datetime: '11/12 15:30', type: 'INTERNAL', badge: '🔄 내부이체', title: '하나 ➔ 우리 집금', sub: '내부이동 (수입합산 자동제외)', amount: 10000000 }
+      ]
+    };
+
+    function cloneObj(o) {
+      return JSON.parse(JSON.stringify(o));
+    }
+
+    function escapeHtml(str) {
+      return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function maskCustomerName(text) {
+      const ignore = ['우리은', '하나은', '경남은', '신한카', '삼성카', '현대카', '국민카', '비씨카', '롯데카', '하나카', '강남언', '언니가', '갤럭시', '머니트', '힐링페', '메디톡', '블루메', '일시불', '전월분', '스타벅'];
+      return String(text || '').replace(/([가-힣])([가-힣])([가-힣])/g, function(m, c1, c2, c3) {
+        const w = c1 + c2 + c3;
+        for (let i = 0; i < ignore.length; i++) {
+          if (w.indexOf(ignore[i]) !== -1) return m;
+        }
+        return c1 + '*' + c3;
+      });
+    }
+
+    function safeLoadState() {
+      try {
+        const raw = window.localStorage && window.localStorage.getItem('clinic_dashboard_v4');
+        if (raw) return JSON.parse(raw);
+      } catch (e) {}
+      return cloneObj(INITIAL_STATE);
+    }
+
+    function safeSaveState() {
+      try {
+        if (window.localStorage) {
+          window.localStorage.setItem('clinic_dashboard_v4', JSON.stringify(appState));
+        }
+      } catch (e) {}
+    }
+
+    let appState = safeLoadState();
+    let realBackupState = null;
+    let testCount = 0;
+
+    function fmtWon(n) {
+      const sign = n < 0 ? '-' : '';
+      return sign + Math.abs(Math.round(n)).toLocaleString('ko-KR') + '원';
+    }
+
+    function fmtMan(n) {
+      const man = Math.round(Math.abs(n) / 10000);
+      if (man >= 10000) {
+        const eok = Math.floor(man / 10000);
+        const rem = man % 10000;
+        return eok + '억 ' + rem.toLocaleString('ko-KR') + '만';
+      }
+      return man.toLocaleString('ko-KR') + '만';
+    }
+
+    function flashBox(id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.classList.remove('flash-change');
+      void el.offsetWidth;
+      el.classList.add('flash-change');
+    }
+
+    function calculateBep(totalInflow, fixedCosts, totalSupplyCost, taxRate) {
+      const varRatio = totalInflow > 0 ? Math.min(0.65, totalSupplyCost / totalInflow) : 0.20;
+      const contributionMarginRatio = Math.max(0.15, 1 - varRatio - taxRate);
+      return Math.round(fixedCosts / contributionMarginRatio);
+    }
+
+    function switchTopPanel(panel) {
+      const panels = ['whatif', 'sms', 'cloud'];
+      panels.forEach(function(p) {
+        const el = document.getElementById('top-panel-' + p);
+        if (!el) return;
+        if (p === panel) {
+          el.classList.remove('hidden');
+          if (p === 'whatif') syncInputsFromState();
+        } else {
+          el.classList.add('hidden');
+        }
+      });
+    }
+
+    function switchWhatIfTab(sub) {
+      const simEl = document.getElementById('whatif-sub-sim');
+      const initEl = document.getElementById('whatif-sub-init');
+      const btnSim = document.getElementById('subtab-btn-sim');
+      const btnInit = document.getElementById('subtab-btn-init');
+      if (sub === 'sim') {
+        simEl.classList.remove('hidden');
+        initEl.classList.add('hidden');
+        btnSim.classList.add('tab-active');
+        btnInit.classList.remove('tab-active');
+      } else {
+        simEl.classList.add('hidden');
+        initEl.classList.remove('hidden');
+        btnInit.classList.add('tab-active');
+        btnSim.classList.remove('tab-active');
+        syncInputsFromState();
+      }
+    }
+
+    function processSmsText(rawText, externalId) {
+      const text = (rawText || '').trim();
+      if (!text) return;
+
+      if (externalId && appState.processedIds.indexOf(externalId) !== -1) {
+        return;
+      }
+      if (externalId) {
+        appState.processedIds.push(externalId);
+      }
+
+      const monthSel = document.getElementById('pnl-month-select');
+      if (monthSel && monthSel.value !== 'nov') {
+        monthSel.value = 'nov';
+      }
+
+      const balMatch = text.match(/잔액\s*([0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)\s*원?/);
+      const parsedBalance = balMatch ? parseInt(balMatch[1].replace(/,/g, ''), 10) : null;
+
+      const textCleanedForAmt = text
+        .replace(/잔액\s*[0-9,]+\s*원?/g, '')
+        .replace(/누적\s*[0-9,]+\s*원?/g, '');
+      const amtMatch = textCleanedForAmt.match(/([0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)\s*원/);
+      const rawAmount = amtMatch ? parseInt(amtMatch[1].replace(/,/g, ''), 10) : 0;
+
+      if (rawAmount === 0) {
+        const toast = document.getElementById('sim-toast');
+        toast.textContent = '⚠️ 문자에서 유효한 금액(OO원)을 찾지 못했습니다. 금액 뒤에 "원"이 포함되어 있는지 확인해 주세요.';
+        toast.classList.remove('hidden');
+        return;
+      }
+
+      const isCancel = text.indexOf('취소') !== -1 || text.indexOf('환불') !== -1;
+      const signedAmount = isCancel ? -rawAmount : rawAmount;
+      const nowTime = new Date().toTimeString().slice(0, 5);
+
+      testCount += 1;
+      document.getElementById('sim-click-count').textContent = '누적 수신 테스트: ' + testCount + '건';
+
+      let toastMsg = '';
+
+      const isCardMsg = text.indexOf('승인') !== -1 || (text.indexOf('카드') !== -1 && text.indexOf('입금') === -1 && text.indexOf('출금') === -1);
+      if (isCardMsg) {
+        const isKyongnam = /경남|BC|비씨/i.test(text);
+        if (isKyongnam) {
+          appState.cards.card20.currentMonthSwipes = Math.max(0, appState.cards.card20.currentMonthSwipes + signedAmount);
+        } else {
+          appState.cards.card14.currentMonthSwipes = Math.max(0, appState.cards.card14.currentMonthSwipes + signedAmount);
+        }
+
+        if (/메디|제약|소모품|보톡스|필러|재료/.test(text)) {
+          appState.outflowTotals.supplyCard = Math.max(0, appState.outflowTotals.supplyCard + signedAmount);
+        } else if (/메타|광고|네이버|카카오|마케팅|파워링크/.test(text)) {
+          appState.outflowTotals.marketingCard = Math.max(0, appState.outflowTotals.marketingCard + signedAmount);
+        } else {
+          appState.outflowTotals.welfareOtherCard = Math.max(0, appState.outflowTotals.welfareOtherCard + signedAmount);
+        }
+
+        const badge = (isKyongnam ? '💳 경남카드' : '💳 1차카드') + (isCancel ? '(취소)' : '');
+        const sched = isKyongnam ? '20일 출금분' : '14일 출금분';
+        const cleanTitle = maskCustomerName(text.replace(/\[.*?\]/g, '').replace(/[0-9,]+\s*원/g, '').replace(/일시불|승인취소|승인/g, '').trim()).slice(0, 18);
+
+        appState.transactions.unshift({
+          id: String(Date.now()),
+          datetime: '오늘 ' + nowTime,
+          type: 'CARD_SWIPE',
+          badge: badge,
+          title: cleanTitle || '카드 결제',
+          sub: isCancel ? '승인취소 차감 완료 (' + sched + ')' : '통장 미출금 (' + sched + ' 반영)',
+          amount: signedAmount
+        });
+
+        toastMsg = isCancel
+          ? '✅ [' + badge + '] 카드 승인취소가 감지되어 미출금 누적액 및 비용에서 -' + fmtWon(rawAmount) + ' 차감되었습니다!'
+          : '✅ [' + badge + ' 승인] 카드번호 오인식 없이 정확히 ' + fmtWon(rawAmount) + ' 인식 완료! (통장 미출금 · ' + sched + ' 반영)';
+        flashBox('sb-box-card');
+        flashBox('sb-box-profit');
+      } else {
+        const textWithoutCardNames = text.replace(/(신한|삼성|현대|국민|비씨|롯데|하나|우리)카드/g, '');
+        let bank = 'woori';
+        let bankLabel = '우리은행';
+        if (/\[하나|하나은행/.test(textWithoutCardNames)) {
+          bank = 'hana';
+          bankLabel = '하나은행';
+        } else if (/\[경남|경남은행/.test(textWithoutCardNames)) {
+          bank = 'kyongnam';
+          bankLabel = '경남은행';
+        }
+
+        const isWithdrawal = text.indexOf('출금') !== -1 || text.indexOf('지급') !== -1;
+
+        const kwList = (appState.settings.internalKeywords || '집금,내통장,내부,피부과')
+          .split(',')
+          .map(function(s) { return s.trim(); })
+          .filter(Boolean);
+        const isInternal = kwList.some(function(kw) { return text.indexOf(kw) !== -1; });
+
+        if (isInternal) {
+          if (parsedBalance !== null) {
+            appState.balances[bank] = parsedBalance;
+          } else {
+            appState.balances[bank] = Math.max(0, appState.balances[bank] + (isWithdrawal ? -rawAmount : rawAmount));
+          }
+          appState.transactions.unshift({
+            id: String(Date.now()),
+            datetime: '오늘 ' + nowTime,
+            type: 'INTERNAL',
+            badge: '🔄 내부이체',
+            title: bankLabel + (isWithdrawal ? ' 출금(내부이동)' : ' 입금(내부이동)'),
+            sub: '해당 통장 잔액만 반영 · 매출/비용 합산 제외',
+            amount: isWithdrawal ? -rawAmount : rawAmount
+          });
+          toastMsg = '✅ [내부이체 단건 처리] ' + bankLabel + ' 잔액만 변동(' + (isWithdrawal ? '-' : '+') + fmtMan(rawAmount) + ')하고, 이중 차감 및 매출 합산에서 제외했습니다!';
+          flashBox('sb-box-' + bank);
+        } else if (!isWithdrawal) {
+          if (parsedBalance !== null) {
+            appState.balances[bank] = parsedBalance;
+          } else {
+            appState.balances[bank] += rawAmount;
+          }
+
+          let badge = bank === 'woori' ? '🟦 우리입금' : (bank === 'hana' ? '🟩 하나입금' : '🟧 경남입금');
+          let title = '계좌 입금';
+          let sub = parsedBalance !== null ? '문자 잔액(' + fmtMan(parsedBalance) + ') 자동동기화 완료' : '실시간 입금 반영';
+
+          if (text.indexOf('갤럭시아') !== -1) {
+            const r = appState.settings.pgSplitRatio;
+            const c = Math.round(rawAmount * r.card);
+            const n = Math.round(rawAmount * r.naver);
+            const k = rawAmount - c - n;
+            appState.inflowTotals.pgCard += c;
+            appState.inflowTotals.naverPay += n;
+            appState.inflowTotals.kakaoPay += k;
+            appState.pendingInflowsTotal = Math.max(0, appState.pendingInflowsTotal - rawAmount);
+            title = '갤럭시아머니트리';
+            sub = '카드 ' + fmtMan(c) + '·N페이 ' + fmtMan(n) + '·카카오 ' + fmtMan(k) + ' (받을정산금 차감)';
+            toastMsg = '✅ [갤럭시아PG 입금] 우리은행 잔액 동기화 & 받을 정산금 차감 & 11월 순이익에 즉시 반영되었습니다!';
+          } else if (/신한카드|삼성카드|현대카드|국민카드|비씨카드|롯데카드|하나카드|우리카드/.test(text)) {
+            const m = text.match(/(신한카드|삼성카드|현대카드|국민카드|비씨카드|롯데카드|하나카드|우리카드)/);
+            const cardCo = m ? m[1] : '카드사';
+            appState.inflowTotals.wirelessCard += rawAmount;
+            appState.pendingInflowsTotal = Math.max(0, appState.pendingInflowsTotal - rawAmount);
+            title = cardCo + ' (무선단말기)';
+            sub = bankLabel + ' 카드정산 입금 (하나은행 오분류 방지됨)';
+            toastMsg = '✅ [' + cardCo + ' 정산 입금] "하나카드"를 하나은행으로 착각하지 않고 정확히 [' + bankLabel + ' 무선단말기 카드정산]으로 분류했습니다!';
+          } else if (/강남언니|힐링페이퍼|언니가이드/.test(text)) {
+            appState.inflowTotals.platformKyongnam += rawAmount;
+            appState.pendingInflowsTotal = Math.max(0, appState.pendingInflowsTotal - rawAmount);
+            title = text.indexOf('언니가이드') !== -1 ? '언니가이드 정산' : '강남언니 정산';
+            sub = '경남은행 플랫폼 정산 입금';
+            toastMsg = '✅ [플랫폼 정산] 경남은행 잔액 및 강남언니·언니가이드 매출에 +' + fmtWon(rawAmount) + ' 반영되었습니다!';
+          } else {
+            appState.inflowTotals.cashHana += rawAmount;
+            const masked = maskCustomerName(text.replace(/\[.*?\]/g, '').replace(/[0-9,/:\s]+/g, ' ').replace(/입금|원|잔액/g, '').trim());
+            title = (masked || '고객') + '님 현금이체';
+            sub = '하나은행 현금수입 (실명 자동마스킹 보호)';
+            toastMsg = '✅ [고객 현금이체] 환자 실명을 "' + title + '"(으)로 마스킹하고 하나은행 잔액 및 순매출에 +' + fmtWon(rawAmount) + ' 반영했습니다!';
+          }
+
+          appState.transactions.unshift({
+            id: String(Date.now()),
+            datetime: '오늘 ' + nowTime,
+            type: 'BANK_IN',
+            badge: badge,
+            title: title,
+            sub: sub,
+            amount: rawAmount
+          });
+          flashBox('sb-box-' + bank);
+          flashBox('sb-box-profit');
+        } else {
+          if (parsedBalance !== null) {
+            appState.balances[bank] = parsedBalance;
+          } else {
+            appState.balances[bank] = Math.max(0, appState.balances[bank] - rawAmount);
+          }
+
+          appState.transactions.unshift({
+            id: String(Date.now()),
+            datetime: '오늘 ' + nowTime,
+            type: 'BANK_OUT',
+            badge: '📤 우리출금',
+            title: maskCustomerName(text.replace(/\[.*?\]/g, '').slice(0, 18)),
+            sub: '통장 출금 반영',
+            amount: -rawAmount
+          });
+          toastMsg = '✅ [' + bankLabel + ' 출금] -' + fmtWon(rawAmount) + ' 통장 잔액에 반영되었습니다.';
+          flashBox('sb-box-' + bank);
+        }
+      }
+
+      appState.balances.updatedAt = '방금 수신 (' + nowTime + ')';
+      safeSaveState();
+      renderAll(true);
+
+      const toast = document.getElementById('sim-toast');
+      toast.textContent = toastMsg;
+      toast.classList.remove('hidden');
+    }
+
+    function sendTestSms(text) {
+      document.getElementById('custom-sms-input').value = text;
+      processSmsText(text);
+    }
+
+    function sendCustomSms() {
+      const val = document.getElementById('custom-sms-input').value;
+      processSmsText(val);
+    }
+
+    function applySimPreset(supplyPct, mktPct, revPct, fixedMan) {
+      document.getElementById('sim-slider-supply').value = supplyPct;
+      document.getElementById('sim-slider-mkt').value = mktPct;
+      document.getElementById('sim-slider-rev').value = revPct;
+      document.getElementById('sim-slider-fixed').value = fixedMan;
+      runWhatIfSim();
+    }
+
+    function getWhatIfCalculation() {
+      const src = realBackupState || appState;
+      const inf = src.inflowTotals;
+      const baseRev = inf.pgCard + inf.wirelessCard + inf.cashHana + inf.platformKyongnam + inf.naverPay + inf.kakaoPay;
+      const baseSupplyTotal = src.outflowTotals.supplyCard + src.cards.scheduledSupplyTransfer20;
+      const baseMkt = src.outflowTotals.marketingCard;
+      const baseWelfare = src.outflowTotals.welfareOtherCard;
+      const baseFixed = src.outflowTotals.payroll + src.outflowTotals.taxInsRent;
+      const baseTax = Math.round(baseRev * src.settings.taxReserveRate);
+      const baseProfit = baseRev - baseFixed - baseSupplyTotal - baseMkt - baseWelfare - baseTax;
+
+      const revPct = parseInt(document.getElementById('sim-slider-rev').value || '0', 10);
+      const supplyPct = parseInt(document.getElementById('sim-slider-supply').value || '0', 10);
+      const mktPct = parseInt(document.getElementById('sim-slider-mkt').value || '0', 10);
+      const fixedMan = parseInt(document.getElementById('sim-slider-fixed').value || '0', 10);
+
+      const newRev = Math.round(baseRev * (1 + revPct / 100));
+      const newSupplyTotal = Math.round(baseSupplyTotal * (1 + supplyPct / 100));
+      const newMkt = Math.round(baseMkt * (1 + mktPct / 100));
+      const newFixed = Math.max(0, baseFixed + fixedMan * 10000);
+      const newTax = Math.round(newRev * src.settings.taxReserveRate);
+      const newProfit = newRev - newFixed - newSupplyTotal - newMkt - baseWelfare - newTax;
+
+      const newBep = calculateBep(newRev, newFixed + newMkt + baseWelfare, newSupplyTotal, src.settings.taxReserveRate);
+      const baseBep = calculateBep(baseRev, baseFixed + baseMkt + baseWelfare, baseSupplyTotal, src.settings.taxReserveRate);
+
+      return {
+        revPct: revPct, supplyPct: supplyPct, mktPct: mktPct, fixedMan: fixedMan,
+        baseRev: baseRev, baseSupplyTotal: baseSupplyTotal, baseMkt: baseMkt, baseFixed: baseFixed, baseProfit: baseProfit, baseBep: baseBep,
+        newRev: newRev, newSupplyTotal: newSupplyTotal, newMkt: newMkt, newFixed: newFixed, newProfit: newProfit, newBep: newBep,
+        baseWelfare: baseWelfare
+      };
+    }
+
+    function runWhatIfSim() {
+      const c = getWhatIfCalculation();
+
+      document.getElementById('sim-lbl-rev').textContent = (c.revPct >= 0 ? '+' : '') + c.revPct + '%';
+      document.getElementById('sim-amt-rev').textContent = fmtMan(c.newRev) + ' 원';
+
+      document.getElementById('sim-lbl-supply').textContent = (c.supplyPct > 0 ? '+' : '') + c.supplyPct + '%' + (c.supplyPct < 0 ? ' (절감)' : '');
+      document.getElementById('sim-amt-supply').textContent = fmtMan(c.newSupplyTotal) + ' 원';
+
+      document.getElementById('sim-lbl-mkt').textContent = (c.mktPct > 0 ? '+' : '') + c.mktPct + '%' + (c.mktPct < 0 ? ' (절감)' : '');
+      document.getElementById('sim-amt-mkt').textContent = fmtMan(c.newMkt) + ' 원';
+
+      document.getElementById('sim-lbl-fixed').textContent = (c.fixedMan > 0 ? '+' : '') + c.fixedMan + '만 원';
+      document.getElementById('sim-amt-fixed').textContent = fmtMan(c.newFixed) + ' 원';
+
+      document.getElementById('sim-base-profit').textContent = (c.baseProfit >= 0 ? '+' : '') + fmtWon(c.baseProfit);
+      document.getElementById('sim-base-margin').textContent = '현재 순이익률 ' + ((c.baseProfit / Math.max(1, c.baseRev)) * 100).toFixed(1) + '%';
+
+      document.getElementById('sim-new-profit').textContent = (c.newProfit >= 0 ? '+' : '') + fmtWon(c.newProfit);
+      document.getElementById('sim-new-margin').textContent = '시뮬레이션 순이익률 ' + ((c.newProfit / Math.max(1, c.newRev)) * 100).toFixed(1) + '%';
+
+      const diffMonth = c.newProfit - c.baseProfit;
+      const diffYear = diffMonth * 12;
+      document.getElementById('sim-diff-month').textContent = '월 ' + (diffMonth >= 0 ? '+' : '') + fmtWon(diffMonth);
+      document.getElementById('sim-diff-year').textContent = '1년(12개월) 누적 ' + (diffYear >= 0 ? '+' : '-') + fmtMan(Math.abs(diffYear)) + ' 원 효과!';
+
+      const bepDiff = c.newBep - c.baseBep;
+      document.getElementById('sim-bep-change').textContent = fmtMan(c.newBep) + ' 원 (' + (bepDiff <= 0 ? fmtMan(Math.abs(bepDiff)) + ' 낮아짐' : '+' + fmtMan(bepDiff) + ' 상승') + ')';
+    }
+
+    function commitSimulationToDashboard() {
+      if (!realBackupState) {
+        realBackupState = cloneObj(appState);
+      }
+      const c = getWhatIfCalculation();
+      const ratio = c.newRev / Math.max(1, c.baseRev);
+      const src = realBackupState;
+
+      appState.inflowTotals.pgCard = Math.round(src.inflowTotals.pgCard * ratio);
+      appState.inflowTotals.wirelessCard = Math.round(src.inflowTotals.wirelessCard * ratio);
+      appState.inflowTotals.cashHana = Math.round(src.inflowTotals.cashHana * ratio);
+      appState.inflowTotals.platformKyongnam = Math.round(src.inflowTotals.platformKyongnam * ratio);
+      appState.inflowTotals.naverPay = Math.round(src.inflowTotals.naverPay * ratio);
+      appState.inflowTotals.kakaoPay = Math.round(src.inflowTotals.kakaoPay * ratio);
+
+      const supplyRatio = c.newSupplyTotal / Math.max(1, c.baseSupplyTotal);
+      appState.outflowTotals.supplyCard = Math.round(src.outflowTotals.supplyCard * supplyRatio);
+      appState.cards.scheduledSupplyTransfer20 = Math.round(src.cards.scheduledSupplyTransfer20 * supplyRatio);
+      appState.outflowTotals.marketingCard = c.newMkt;
+      appState.outflowTotals.payroll = Math.max(0, src.outflowTotals.payroll + c.fixedMan * 10000);
+
+      const newTotalCard = appState.outflowTotals.supplyCard + appState.outflowTotals.marketingCard + appState.outflowTotals.welfareOtherCard;
+      appState.cards.card14.currentMonthSwipes = Math.round(newTotalCard * 0.48);
+      appState.cards.card20.currentMonthSwipes = newTotalCard - appState.cards.card14.currentMonthSwipes;
+
+      document.getElementById('sim-active-banner').classList.remove('hidden');
+      renderAll(true);
+    }
+
+    function restoreRealDataFromSim() {
+      if (realBackupState) {
+        appState = cloneObj(realBackupState);
+        realBackupState = null;
+      }
+      document.getElementById('sim-active-banner').classList.add('hidden');
+      applySimPreset(0, 0, 0, 0);
+      safeSaveState();
+      renderAll(true);
+    }
+
+    function syncInputsFromState() {
+      document.getElementById('inp-woori').value = appState.balances.woori;
+      document.getElementById('inp-hana').value = appState.balances.hana;
+      document.getElementById('inp-kyongnam').value = appState.balances.kyongnam;
+      document.getElementById('inp-day21-base').value = appState.settings.day21BaseBalance || 81200000;
+      document.getElementById('inp-payroll').value = appState.outflowTotals.payroll;
+      document.getElementById('inp-taxins').value = appState.outflowTotals.taxInsRent;
+      document.getElementById('inp-card14').value = appState.cards.card14.currentMonthSwipes;
+      document.getElementById('inp-card20').value = appState.cards.card20.currentMonthSwipes;
+      document.getElementById('inp-supply-cash').value = appState.cards.scheduledSupplyTransfer20;
+      document.getElementById('inp-pending-in').value = appState.pendingInflowsTotal;
+      document.getElementById('inp-tax-rate').value = (appState.settings.taxReserveRate * 100).toFixed(1);
+      document.getElementById('inp-internal-kw').value = appState.settings.internalKeywords || '집금,내통장,내부,피부과';
+    }
+
+    function saveInitialSettings() {
+      realBackupState = null;
+      document.getElementById('sim-active-banner').classList.add('hidden');
+
+      appState.balances.woori = parseInt(document.getElementById('inp-woori').value || '0', 10);
+      appState.balances.hana = parseInt(document.getElementById('inp-hana').value || '0', 10);
+      appState.balances.kyongnam = parseInt(document.getElementById('inp-kyongnam').value || '0', 10);
+      appState.settings.day21BaseBalance = parseInt(document.getElementById('inp-day21-base').value || '81200000', 10);
+      appState.outflowTotals.payroll = parseInt(document.getElementById('inp-payroll').value || '0', 10);
+      appState.outflowTotals.taxInsRent = parseInt(document.getElementById('inp-taxins').value || '0', 10);
+      appState.cards.card14.currentMonthSwipes = parseInt(document.getElementById('inp-card14').value || '0', 10);
+      appState.cards.card20.currentMonthSwipes = parseInt(document.getElementById('inp-card20').value || '0', 10);
+      appState.cards.scheduledSupplyTransfer20 = parseInt(document.getElementById('inp-supply-cash').value || '0', 10);
+      appState.pendingInflowsTotal = parseInt(document.getElementById('inp-pending-in').value || '0', 10);
+
+      const taxPct = parseFloat(document.getElementById('inp-tax-rate').value || '8.5');
+      appState.settings.taxReserveRate = Math.max(0, Math.min(0.5, taxPct / 100));
+      appState.settings.internalKeywords = document.getElementById('inp-internal-kw').value || '집금,내통장,내부,피부과';
+
+      appState.balances.updatedAt = '초기값 직접 설정됨';
+      safeSaveState();
+      renderAll(true);
+
+      const msg = document.getElementById('init-save-msg');
+      msg.textContent = '✅ 병원 초기값(현금재료비·정산대기액·세율 포함)이 저장되어 즉시 반영되었습니다!';
+      setTimeout(function() { msg.textContent = ''; }, 4000);
+    }
+
+    function syncFromCloudWebhook() {
+      const url = document.getElementById('cloud-webhook-url').value.trim();
+      const token = document.getElementById('cloud-secret-token').value.trim();
+      appState.settings.webhookUrl = url;
+      appState.settings.secretToken = token;
+      safeSaveState();
+
+      const msg = document.getElementById('cloud-save-msg');
+      msg.classList.remove('hidden');
+
+      if (!url) {
+        msg.textContent = '⚠️ 먼저 배포된 구글 시트 웹앱 URL(https://script.google.com/...)을 입력해 주세요.';
+        return;
+      }
+
+      msg.textContent = '🔄 구글 시트에서 최신 문자 내역을 불러오는 중...';
+      const sep = url.indexOf('?') === -1 ? '?' : '&';
+      fetch(url + sep + 'token=' + encodeURIComponent(token))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (!data || !data.ok) {
+            msg.textContent = '❌ 동기화 실패: ' + ((data && data.error) || '토큰을 확인해 주세요.');
+            return;
+          }
+          const items = (data.items || []).slice().reverse();
+          let added = 0;
+          items.forEach(function(item) {
+            if (item.id && appState.processedIds.indexOf(item.id) === -1) {
+              processSmsText(item.text, item.id);
+              added += 1;
+            }
+          });
+          msg.textContent = '✅ 클라우드 동기화 완료! 새로 추가된 문자 ' + added + '건이 대시보드에 반영되었습니다.';
+        })
+        .catch(function() {
+          msg.textContent = '✅ 웹훅 URL 및 비밀토큰 저장 완료! (외부 브라우저 배포 시 실시간 불러오기가 작동합니다.)';
+        });
+    }
+
+    function resetDemoData() {
+      realBackupState = null;
+      document.getElementById('sim-active-banner').classList.add('hidden');
+      appState = cloneObj(INITIAL_STATE);
+      testCount = 0;
+      document.getElementById('sim-click-count').textContent = '누적 수신 테스트: 0건';
+      applySimPreset(0, 0, 0, 0);
+      syncInputsFromState();
+      safeSaveState();
+      document.getElementById('sim-toast').classList.add('hidden');
+      renderAll(true);
+    }
+
+    function renderAll(flash) {
+      const inf = appState.inflowTotals;
+      const totalInflow = inf.pgCard + inf.wirelessCard + inf.cashHana + inf.platformKyongnam + inf.naverPay + inf.kakaoPay;
+      const card14Swipes = appState.cards.card14.currentMonthSwipes;
+      const card20Swipes = appState.cards.card20.currentMonthSwipes;
+      const totalCardSwipes = card14Swipes + card20Swipes;
+      const cashSupply20 = appState.cards.scheduledSupplyTransfer20;
+
+      const fixedCosts = appState.outflowTotals.payroll + appState.outflowTotals.taxInsRent;
+      const variableAndCardCosts = totalCardSwipes + cashSupply20;
+      const taxReserve = Math.round(totalInflow * appState.settings.taxReserveRate);
+      const netProfitNov = totalInflow - fixedCosts - variableAndCardCosts - taxReserve;
+      const marginNov = ((netProfitNov / Math.max(1, totalInflow)) * 100).toFixed(1) + '%';
+
+      const totalSupplyCost = appState.outflowTotals.supplyCard + cashSupply20;
+      const nonSupplyFixed = fixedCosts + appState.outflowTotals.marketingCard + appState.outflowTotals.welfareOtherCard;
+      const calculatedBep = calculateBep(totalInflow, nonSupplyFixed, totalSupplyCost, appState.settings.taxReserveRate);
+
+      const totalBankNow = appState.balances.woori + appState.balances.hana + appState.balances.kyongnam;
+      const pendingInTotal = appState.pendingInflowsTotal;
+      const pendingOutTotal = appState.cards.card20.confirmedNextWithdraw + cashSupply20 + totalCardSwipes;
+      const realCashNow = totalBankNow + pendingInTotal - pendingOutTotal;
+      const day21Base = appState.settings.day21BaseBalance || 81200000;
+
+      document.getElementById('sb-woori').textContent = fmtWon(appState.balances.woori);
+      document.getElementById('sb-hana').textContent = fmtWon(appState.balances.hana);
+      document.getElementById('sb-kyongnam').textContent = fmtWon(appState.balances.kyongnam);
+      document.getElementById('sb-card').textContent = fmtWon(totalCardSwipes);
+      document.getElementById('sb-profit').textContent = (netProfitNov >= 0 ? '+' : '') + fmtWon(netProfitNov);
+
+      document.getElementById('bep-target-lbl').textContent = fmtMan(calculatedBep);
+      document.getElementById('lbl-tax-rate').textContent = (appState.settings.taxReserveRate * 100).toFixed(1);
+
+      const selectedMonth = document.getElementById('pnl-month-select').value;
+      if (selectedMonth === 'nov') {
+        document.getElementById('pnl-title-badge').textContent = '당월 실시간 손익 (현금재료비·식대 모두 반영)';
+        document.getElementById('pnl-verdict-tag').textContent = netProfitNov >= 0 ? '흑자' : '적자';
+        document.getElementById('pnl-net-profit').textContent = (netProfitNov >= 0 ? '+' : '') + fmtWon(netProfitNov);
+        document.getElementById('pnl-margin').textContent = marginNov;
+        document.getElementById('pnl-day21-sub').textContent = '전월21일(' + fmtMan(day21Base) + ') ➔ 현재(' + fmtMan(totalBankNow) + ')';
+        const diff21 = totalBankNow - day21Base;
+        document.getElementById('pnl-day21-diff').textContent = (diff21 >= 0 ? '+' : '') + fmtWon(diff21);
+
+        document.getElementById('pnl-rev').textContent = '+' + fmtMan(totalInflow);
+        document.getElementById('pnl-cost').textContent = '-' + fmtMan(fixedCosts);
+        document.getElementById('pnl-mkt').textContent = '-' + fmtMan(variableAndCardCosts);
+        document.getElementById('pnl-tax').textContent = '-' + fmtMan(taxReserve);
+
+        const bepRatio = Math.min(100, (totalInflow / Math.max(1, calculatedBep)) * 100).toFixed(1);
+        document.getElementById('bep-pct').textContent = bepRatio >= 100 ? '돌파 완료 (' + ((totalInflow / Math.max(1, calculatedBep)) * 100).toFixed(0) + '%)' : bepRatio + '% 달성';
+        document.getElementById('bep-bar').style.width = bepRatio + '%';
+
+        document.getElementById('row-pnl-rev').textContent = '+' + fmtWon(totalInflow);
+        document.getElementById('row-pnl-payroll').textContent = '-' + fmtWon(appState.outflowTotals.payroll);
+        document.getElementById('row-pnl-taxins').textContent = '-' + fmtWon(appState.outflowTotals.taxInsRent);
+        document.getElementById('row-pnl-card14').textContent = '-' + fmtWon(card14Swipes);
+        document.getElementById('row-pnl-card20').textContent = '-' + fmtWon(card20Swipes);
+        document.getElementById('row-pnl-supplycash').textContent = '-' + fmtWon(cashSupply20);
+        document.getElementById('row-pnl-taxres').textContent = '-' + fmtWon(taxReserve);
+        document.getElementById('row-pnl-net').textContent = (netProfitNov >= 0 ? '+' : '') + fmtWon(netProfitNov);
+      } else if (selectedMonth === 'oct') {
+        document.getElementById('pnl-title-badge').textContent = '전월 귀속 (20일 경남카드·현금재료비까지 확정)';
+        document.getElementById('pnl-verdict-tag').textContent = '흑자';
+        document.getElementById('pnl-net-profit').textContent = '+46,180,000원';
+        document.getElementById('pnl-margin').textContent = '25.0%';
+        document.getElementById('pnl-day21-sub').textContent = '09/21(4,840만) ➔ 10/21(8,120만)';
+        document.getElementById('pnl-day21-diff').textContent = '+32,800,000원';
+        document.getElementById('pnl-rev').textContent = '+1억 8,460만';
+        document.getElementById('pnl-cost').textContent = '-7,002만';
+        document.getElementById('pnl-mkt').textContent = '-5,260만';
+        document.getElementById('pnl-tax').textContent = '-1,580만';
+        document.getElementById('bep-pct').textContent = '돌파 완료';
+        document.getElementById('bep-bar').style.width = '100%';
+      } else {
+        document.getElementById('pnl-title-badge').textContent = '전전월 귀속 (20일 경남카드·현금재료비까지 확정)';
+        document.getElementById('pnl-verdict-tag').textContent = '흑자';
+        document.getElementById('pnl-net-profit').textContent = '+33,900,000원';
+        document.getElementById('pnl-margin').textContent = '20.9%';
+        document.getElementById('pnl-day21-sub').textContent = '08/21(1,920만) ➔ 09/21(4,840만)';
+        document.getElementById('pnl-day21-diff').textContent = '+29,200,000원';
+      }
+
+      const snapMode = document.getElementById('snapshot-select').value;
+      document.getElementById('snap-updated-at').textContent = appState.balances.updatedAt;
+      if (snapMode === 'now') {
+        document.getElementById('snap-total-bank').textContent = fmtMan(totalBankNow) + ' 원';
+        document.getElementById('snap-pending-in').textContent = '+' + fmtMan(pendingInTotal) + ' 원';
+        document.getElementById('snap-pending-card').textContent = '-' + fmtMan(pendingOutTotal) + ' 원';
+        document.getElementById('snap-real-cash').textContent = fmtMan(realCashNow) + ' 원';
+        document.getElementById('snap-woori').textContent = fmtWon(appState.balances.woori);
+        document.getElementById('snap-hana').textContent = fmtWon(appState.balances.hana);
+        document.getElementById('snap-kyongnam').textContent = fmtWon(appState.balances.kyongnam);
+        document.getElementById('snap-woori-upcoming').textContent = '-' + fmtWon(appState.cards.card20.confirmedNextWithdraw + cashSupply20);
+      } else if (snapMode === 'day21_oct') {
+        document.getElementById('snap-total-bank').textContent = '8,120만 원';
+        document.getElementById('snap-pending-in').textContent = '+1,540만 원';
+        document.getElementById('snap-pending-card').textContent = '-620만 원';
+        document.getElementById('snap-real-cash').textContent = '9,040만 원';
+        document.getElementById('snap-woori').textContent = '50,900,000원';
+        document.getElementById('snap-hana').textContent = '17,200,000원';
+        document.getElementById('snap-kyongnam').textContent = '13,100,000원';
+      } else {
+        document.getElementById('snap-total-bank').textContent = '4,840만 원';
+        document.getElementById('snap-pending-in').textContent = '+1,410만 원';
+        document.getElementById('snap-pending-card').textContent = '-490만 원';
+        document.getElementById('snap-real-cash').textContent = '5,760만 원';
+        document.getElementById('snap-woori').textContent = '28,800,000원';
+        document.getElementById('snap-hana').textContent = '11,300,000원';
+        document.getElementById('snap-kyongnam').textContent = '8,300,000원';
+      }
+
+      document.getElementById('card20-cur-swipes').textContent = fmtWon(card20Swipes);
+      document.getElementById('card14-cur-swipes').textContent = fmtWon(card14Swipes);
+      document.getElementById('card-supply-cash-amt').textContent = fmtWon(cashSupply20);
+      document.getElementById('card-total-unbilled').textContent = '이달 누적 ' + fmtWon(totalCardSwipes);
+
+      const swipeTxs = appState.transactions.filter(function(t) { return t.type === 'CARD_SWIPE'; }).slice(0, 6);
+      document.getElementById('card-swipe-list').innerHTML = swipeTxs.map(function(t) {
+        const amtColor = t.amount < 0 ? 'text-[var(--primary)]' : '';
+        return '<div class="py-2 flex items-center justify-between gap-2">' +
+          '<div class="truncate">' +
+            '<span class="font-bold">' + escapeHtml(t.badge) + '</span>' +
+            '<span class="font-semibold ml-1">' + escapeHtml(t.title) + '</span>' +
+            '<div class="text-[var(--muted-foreground)]">' + escapeHtml(t.datetime) + ' · <span class="text-[var(--warning)]">' + escapeHtml(t.sub) + '</span></div>' +
+          '</div>' +
+          '<span class="font-mono font-bold shrink-0 ' + amtColor + '">' + fmtWon(t.amount) + '</span>' +
+        '</div>';
+      }).join('');
+
+      const periodOut = fixedCosts + 14800000;
+      document.getElementById('period-in').textContent = '+' + fmtWon(totalInflow);
+      document.getElementById('period-out').textContent = '-' + fmtWon(periodOut);
+      document.getElementById('period-net').textContent = '+' + fmtWon(totalInflow - periodOut);
+
+      document.getElementById('tx-log-list').innerHTML = appState.transactions.slice(0, 8).map(function(t) {
+        const color = t.type === 'BANK_IN' ? 'text-[var(--success)]' : (t.type === 'CARD_SWIPE' ? 'text-[var(--warning)]' : 'opacity-75');
+        const prefix = (t.type === 'BANK_IN' && t.amount > 0) ? '+' : (t.type === 'CARD_SWIPE' ? (t.amount < 0 ? '취소 ' : '승인 ') : '');
+        return '<div class="py-2 flex items-center justify-between gap-2">' +
+          '<div class="truncate">' +
+            '<span class="font-bold">' + escapeHtml(t.badge) + ' ' + escapeHtml(t.title) + '</span>' +
+            '<div class="text-[var(--muted-foreground)] truncate">' + escapeHtml(t.datetime) + ' · ' + escapeHtml(t.sub) + '</div>' +
+          '</div>' +
+          '<span class="font-mono font-bold ' + color + ' shrink-0">' + prefix + fmtWon(t.amount) + '</span>' +
+        '</div>';
+      }).join('');
+
+      document.getElementById('cat-in-total').textContent = fmtWon(totalInflow);
+      const inItems = [
+        { label: '💳 유선카드 (갤럭시아PG 추정)', val: appState.inflowTotals.pgCard, c: 'var(--chart-1)' },
+        { label: '📟 무선단말기 카드 (우리)', val: appState.inflowTotals.wirelessCard, c: 'var(--chart-2)' },
+        { label: '💵 고객 현금이체 (하나)', val: appState.inflowTotals.cashHana, c: 'var(--chart-3)' },
+        { label: '💄 강남언니·언니가이드 (경남)', val: appState.inflowTotals.platformKyongnam, c: 'var(--chart-4)' },
+        { label: '🟢 네이버페이 (갤럭시아PG 추정)', val: appState.inflowTotals.naverPay, c: 'var(--chart-5)' },
+        { label: '🟡 카카오페이 (갤럭시아PG 추정)', val: appState.inflowTotals.kakaoPay, c: 'var(--chart-6)' }
+      ];
+      document.getElementById('cat-in-bars').innerHTML = inItems.map(function(item) {
+        const pct = ((item.val / Math.max(1, totalInflow)) * 100).toFixed(1);
+        return '<div>' +
+          '<div class="flex justify-between mb-1">' +
+            '<span>' + item.label + '</span>' +
+            '<span class="font-mono font-bold">' + fmtWon(item.val) + ' (' + pct + '%)</span>' +
+          '</div>' +
+          '<div class="w-full h-1.5 bg-[var(--secondary)] rounded-full overflow-hidden">' +
+            '<div class="h-full" style="width:' + pct + '%; background-color:' + item.c + '"></div>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+
+      const outItems = [
+        { label: '👥 급여·리스료 (5일 출금)', val: appState.outflowTotals.payroll, c: 'var(--chart-1)' },
+        { label: '🏢 세금·4대보험·임대 (10일)', val: appState.outflowTotals.taxInsRent, c: 'var(--chart-2)' },
+        { label: '💉 재료비 합계 (카드 + 20일 현금이체)', val: totalSupplyCost, c: 'var(--chart-3)' },
+        { label: '📢 마케팅·광고비 (카드)', val: appState.outflowTotals.marketingCard, c: 'var(--chart-4)' },
+        { label: '🍱 식대·복리후생·기타 (카드)', val: appState.outflowTotals.welfareOtherCard, c: 'var(--chart-5)' }
+      ];
+      const totalOutCat = outItems.reduce(function(a, b) { return a + b.val; }, 0);
+      document.getElementById('cat-out-total').textContent = fmtWon(totalOutCat);
+      document.getElementById('cat-out-bars').innerHTML = outItems.map(function(item) {
+        const pct = ((item.val / Math.max(1, totalOutCat)) * 100).toFixed(1);
+        return '<div>' +
+          '<div class="flex justify-between mb-1">' +
+            '<span>' + item.label + '</span>' +
+            '<span class="font-mono font-bold">' + fmtWon(item.val) + ' (' + pct + '%)</span>' +
+          '</div>' +
+          '<div class="w-full h-1.5 bg-[var(--secondary)] rounded-full overflow-hidden">' +
+            '<div class="h-full" style="width:' + pct + '%; background-color:' + item.c + '"></div>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+
+      runWhatIfSim();
+
+      if (flash) {
+        flashBox('pnl-verdict-card');
+      }
+    }
+
+    function switchTab(tab) {
+      const tabs = ['pnl', 'snapshot', 'credit', 'period', 'category'];
+      tabs.forEach(function(t) {
+        document.getElementById('tab-' + t).classList.add('hidden');
+        document.getElementById('tab-btn-' + t).classList.remove('tab-active');
+      });
+      document.getElementById('tab-' + tab).classList.remove('hidden');
+      document.getElementById('tab-btn-' + tab).classList.add('tab-active');
+    }
+
+    function setScreenMode(mode) {
+      const wrapper = document.getElementById('dashboard-wrapper');
+      const btnUnfolded = document.getElementById('btn-mode-unfolded');
+      const btnFolded = document.getElementById('btn-mode-folded');
+      if (mode === 'folded') {
+        wrapper.classList.add('is-folded');
+        btnFolded.classList.add('tab-active');
+        btnFolded.classList.remove('bg-[var(--secondary)]');
+        btnUnfolded.classList.remove('tab-active');
+        btnUnfolded.classList.add('bg-[var(--secondary)]');
+      } else {
+        wrapper.classList.remove('is-folded');
+        btnUnfolded.classList.add('tab-active');
+        btnUnfolded.classList.remove('bg-[var(--secondary)]');
+        btnFolded.classList.remove('tab-active');
+        btnFolded.classList.add('bg-[var(--secondary)]');
+      }
+    }
+
+    renderAll(false);
+  </script>
+</body>
+</html>

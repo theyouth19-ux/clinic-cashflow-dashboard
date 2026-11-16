@@ -1,0 +1,10 @@
+{
+  "name": "피부과 의원 자금·손익 관제",
+  "short_name": "피부과손익",
+  "description": "우리·하나·경남은행 및 14일·20일 카드, 매월 21일 공식 기준일 실시간 자금·손익 대시보드",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "orientation": "any"
+}
