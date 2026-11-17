@@ -3,4 +3,5 @@ __pycache__/
 *.pyc
 .env
 .DS_Store
-data/db.json
+data/
+config/collector_config.json

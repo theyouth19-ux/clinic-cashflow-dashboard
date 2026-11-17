@@ -1,146 +1,91 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const {
+  parseBatchRecords,
+  parseSingleTextLine,
+  pushStateToGoogleSheet
+} = require('./auto_collector');
 
 const PORT = process.env.PORT || 3080;
+const HOST = process.env.HOST || '127.0.0.1';
 const DATA_DIR = path.join(__dirname, 'data');
+const INBOX_DIR = path.join(DATA_DIR, 'inbox');
+const PROCESSED_DIR = path.join(INBOX_DIR, 'processed');
+const CONFIG_DIR = path.join(__dirname, 'config');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
+const CONFIG_FILE = path.join(CONFIG_DIR, 'collector_config.json');
+const CONFIG_EXAMPLE_FILE = path.join(CONFIG_DIR, 'collector_config.example.json');
 
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-}
+[DATA_DIR, INBOX_DIR, PROCESSED_DIR, CONFIG_DIR].forEach(dir => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+});
 
-// 초기 샘플 데이터 (우리은행, 하나은행, 경남은행 + 14일/20일 카드 + 매월 21일 공식 기준일)
+// 초기 데이터: 우리·하나·경남 개인사업자 통장 + 13일(삼성)·14일(국민/우리/신한/롯데)·23일(경남) 카드 + 매월 24일 공식 기준일
 const INITIAL_DB = {
   settings: {
-    clinicName: '피부과 의원 자금·손익 관제',
-    officialCutoffDay: 21,
-    bepTarget: 108000000,
-    pgSplitRatio: { card: 0.8, naver: 0.12, kakao: 0.08, feeRate: 0.028 },
-    taxReserveRate: 0.085
+    officialCutoffDay: 24,
+    day24BaseBalance: 81200000,
+    pgSplitRatio: { card: 0.80, naver: 0.12, kakao: 0.08, feeRate: 0.028 },
+    pgIsActual: false,
+    taxReserveRate: 0.085,
+    internalKeywords: '집금,내통장,내부,피부과',
+    webhookUrl: '',
+    secretToken: 'clinic-24'
   },
   balances: {
     woori: 52180000,
     hana: 18900000,
     kyongnam: 13440000,
-    updatedAt: '2026-11-16 12:30'
+    updatedAt: 'PC 자동수집 대기중'
   },
-  pendingInflows: {
-    galaxiaPg: 12450000,
-    wirelessCard: 4600000,
-    platform: 2400000
-  },
+  pendingInflowsTotal: 19450000,
   cards: {
+    card13: {
+      name: '삼성카드 (13일 출금)',
+      withdrawDay: 13,
+      currentMonthSwipes: 3420000,
+      confirmedNextWithdraw: 0
+    },
     card14: {
-      name: '1차 일반 사업자카드 (14일 출금)',
+      name: '국민·우리·신한·롯데 (14일 출금)',
       withdrawDay: 14,
-      cycleDesc: '전월 1일 ~ 전월 말일 사용분',
-      confirmedNextWithdraw: 0, // 11/14 이미 출금 완료
-      lastWithdrawnAmount: 14800000,
-      lastWithdrawnDate: '2026-11-14',
-      currentMonthSwipes: 8920000
+      currentMonthSwipes: 5500000,
+      confirmedNextWithdraw: 0
     },
-    card20: {
-      name: '2차 경남은행 카드 (20일 출금)',
-      withdrawDay: 20,
-      cycleDesc: '전월 1일 ~ 전월 말일 사용분',
-      confirmedNextWithdraw: 11400000, // 11/20 출금 확정 (10/1~10/31 사용분)
-      lastWithdrawnAmount: 10200000,
-      lastWithdrawnDate: '2026-10-20',
-      currentMonthSwipes: 9720000
+    card23: {
+      name: 'BNK경남카드 (23일 출금)',
+      withdrawDay: 23,
+      currentMonthSwipes: 9720000,
+      confirmedNextWithdraw: 11400000
     },
-    scheduledSupplyTransfer20: 8000000 // 11/20 거래처 현금이체 예정 재료비
+    scheduledSupplyTransfer20: 8000000
   },
+  inflowTotals: {
+    pgCard: 44200000,
+    wirelessCard: 16800000,
+    cashHana: 14500000,
+    platformKyongnam: 9840000,
+    naverPay: 6460000,
+    kakaoPay: 4600000
+  },
+  outflowTotals: {
+    payroll: 28500000,
+    taxInsRent: 16900000,
+    supplyCard: 7940000,
+    marketingCard: 7800000,
+    welfareOtherCard: 2900000
+  },
+  processedIds: [],
   transactions: [
-    {
-      id: 'tx-101',
-      datetime: '2026-11-16 11:15',
-      type: 'BANK_IN',
-      bank: 'woori',
-      rawSender: '갤럭시아머니트리',
-      category: 'PG_SETTLEMENT',
-      subBreakdown: { card: 5360000, naver: 804000, kakao: 536000, fee: 190000 },
-      amount: 6700000,
-      balanceAfter: 52180000,
-      memo: '유선단말기 PG 정산 (카드·N페이·카카오페이 자동분해)'
-    },
-    {
-      id: 'tx-102',
-      datetime: '2026-11-16 10:42',
-      type: 'BANK_IN',
-      bank: 'hana',
-      rawSender: '박지현',
-      category: 'CASH_TRANSFER',
-      amount: 550000,
-      balanceAfter: 18900000,
-      memo: '고객 시술비 계좌이체 현금수입'
-    },
-    {
-      id: 'tx-103',
-      datetime: '2026-11-16 10:15',
-      type: 'CARD_SWIPE',
-      cardType: 'card14',
-      rawSender: '메타(Facebook/Insta) 광고',
-      category: 'EXP_MARKETING',
-      amount: 900000,
-      withdrawSchedule: '2026-12-14',
-      memo: '카드 결제시점 지출 반영 (통장 미출금 · 12/14 출금예정)'
-    },
-    {
-      id: 'tx-104',
-      datetime: '2026-11-15 16:40',
-      type: 'CARD_SWIPE',
-      cardType: 'card20',
-      rawSender: '(주)블루메디칼 소모품',
-      category: 'EXP_SUPPLY_CARD',
-      amount: 1850000,
-      withdrawSchedule: '2026-12-20',
-      memo: '경남은행 카드 결제시점 지출 반영 (12/20 출금예정)'
-    },
-    {
-      id: 'tx-105',
-      datetime: '2026-11-15 14:10',
-      type: 'BANK_IN',
-      bank: 'kyongnam',
-      rawSender: '(주)힐링페이퍼(강남언니)',
-      category: 'PLATFORM_GANGNAM',
-      amount: 1890000,
-      balanceAfter: 13440000,
-      memo: '강남언니 플랫폼 정산 입금'
-    },
-    {
-      id: 'tx-106',
-      datetime: '2026-11-15 11:05',
-      type: 'BANK_IN',
-      bank: 'woori',
-      rawSender: '신한카드',
-      category: 'WIRELESS_CARD',
-      amount: 1620000,
-      balanceAfter: 45480000,
-      memo: '무선단말기 카드사 직접 정산 입금'
-    },
-    {
-      id: 'tx-107',
-      datetime: '2026-11-14 18:00',
-      type: 'BANK_OUT',
-      bank: 'woori',
-      rawSender: '1차사업자카드대금(10월분)',
-      category: 'CARD_BILL_SETTLEMENT',
-      amount: 14800000,
-      balanceAfter: 43860000,
-      memo: '14일 카드대금 출금 완료 (10월 귀속분 부채 소멸)'
-    },
-    {
-      id: 'tx-108',
-      datetime: '2026-11-12 15:30',
-      type: 'INTERNAL_TRANSFER',
-      bank: 'hana_to_woori',
-      rawSender: '하나 ➔ 우리 내부이체',
-      category: 'INTERNAL_TRANSFER',
-      amount: 10000000,
-      balanceAfter: 58660000,
-      memo: '통장 간 내부 자금이동 (수입·지출 중복 자동 제외)'
-    }
+    { id: '1', datetime: '11/16 11:15', type: 'BANK_IN', badge: '🟦 우리입금', title: '갤럭시아머니트리', sub: '카드 536만·N페이 80만·카카오 54만', amount: 6700000 },
+    { id: '2', datetime: '11/16 10:42', type: 'BANK_IN', badge: '🟩 하나입금', title: '박*현 고객님', sub: '시술비 계좌이체 (실명자동마스킹)', amount: 550000 },
+    { id: '3', datetime: '11/16 10:15', type: 'CARD_SWIPE', badge: '💳 신한카드(14일)', title: '메타(인스타) 광고비', sub: '아직 미출금 (14일 출금예정)', amount: 900000 },
+    { id: '4', datetime: '11/15 16:40', type: 'CARD_SWIPE', badge: '💳 경남카드(23일)', title: '(주)블루메디칼 소모품', sub: '아직 미출금 (23일 출금예정)', amount: 1850000 },
+    { id: '5', datetime: '11/15 14:10', type: 'BANK_IN', badge: '🟧 경남입금', title: '강남언니 정산금', sub: '플랫폼 정산 입금', amount: 1890000 },
+    { id: '6', datetime: '11/13 18:00', type: 'CARD_SWIPE', badge: '💳 삼성카드(13일)', title: '메디톡스 의약품결제', sub: '아직 미출금 (13일 출금예정)', amount: 1200000 }
   ]
 };
 
@@ -148,203 +93,88 @@ function loadDb() {
   if (!fs.existsSync(DB_FILE)) {
     fs.writeFileSync(DB_FILE, JSON.stringify(INITIAL_DB, null, 2), 'utf8');
   }
-  return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+  try {
+    const db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+    if (!db.cards.card13) {
+      db.cards = JSON.parse(JSON.stringify(INITIAL_DB.cards));
+      db.settings.officialCutoffDay = 24;
+    }
+    return db;
+  } catch (e) {
+    return JSON.parse(JSON.stringify(INITIAL_DB));
+  }
 }
 
 function saveDb(db) {
   fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), 'utf8');
 }
 
-// 한국 은행 입출금 문자 & 신용카드 승인 문자 자동 파서 (갤럭시 폴드5 SMS 포워더 호환)
-function parseIncomingSms(rawText, db) {
-  const text = (rawText || '').trim();
-  const nowStr = new Date().toISOString().slice(0, 16).replace('T', ' ');
-
-  // 금액 추출 (예: 6,700,000원)
-  const amountMatches = [...text.matchAll(/([0-9]{1,3}(?:,[0-9]{3})+|[0-9]{4,})\s*원/g)];
-  const primaryAmount = amountMatches.length > 0
-    ? parseInt(amountMatches[0][1].replace(/,/g, ''), 10)
-    : 0;
-
-  // 잔액 추출 (예: 잔액 52,180,000원)
-  const balMatch = text.match(/잔액\s*([0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)\s*원?/);
-  const parsedBalance = balMatch ? parseInt(balMatch[1].replace(/,/g, ''), 10) : null;
-
-  // 1) 신용카드 승인 문자 판별 (결제시점 대시보드용 - 아직 통장 미출금)
-  if (text.includes('승인') || (text.includes('카드') && !text.includes('입금') && !text.includes('출금'))) {
-    const isKyongnamCard = text.includes('경남') || text.includes('BC') || text.includes('비씨');
-    const cardKey = isKyongnamCard ? 'card20' : 'card14';
-
-    let category = 'EXP_OTHER_CARD';
-    let label = '기타 운영비 카드결제';
-    if (/메타|광고|네이버|카카오|강남언니|마케팅|파워링크/i.test(text)) {
-      category = 'EXP_MARKETING';
-      label = '마케팅·광고비 (카드 결제시점)';
-    } else if (/메디|제약|약품|소모품|보톡스|필러|니들|재료/i.test(text)) {
-      category = 'EXP_SUPPLY_CARD';
-      label = '의약품·소모품 재료비 (카드 결제시점)';
-    } else if (/식당|배달|식대|카페|스타벅스|편의점|마트/i.test(text)) {
-      category = 'EXP_WELFARE';
-      label = '직원 식대·복리후생 (카드 결제시점)';
+function loadConfig() {
+  if (!fs.existsSync(CONFIG_FILE)) {
+    if (fs.existsSync(CONFIG_EXAMPLE_FILE)) {
+      fs.copyFileSync(CONFIG_EXAMPLE_FILE, CONFIG_FILE);
+    } else {
+      fs.writeFileSync(CONFIG_FILE, JSON.stringify({}, null, 2), 'utf8');
     }
-
-    db.cards[cardKey].currentMonthSwipes += primaryAmount;
-    const withdrawSchedule = isKyongnamCard ? '익월 20일 (경남카드)' : '익월 14일 (1차카드)';
-
-    const tx = {
-      id: 'tx-' + Date.now(),
-      datetime: nowStr,
-      type: 'CARD_SWIPE',
-      cardType: cardKey,
-      rawSender: text.slice(0, 32),
-      category,
-      amount: primaryAmount,
-      withdrawSchedule,
-      memo: `${label} · 아직 통장 미출금 (${withdrawSchedule} 출금예정)`
-    };
-    db.transactions.unshift(tx);
-    db.balances.updatedAt = nowStr;
-    return { ok: true, parsedType: 'CARD_SWIPE', tx };
   }
-
-  // 2) 은행 입출금 문자 판별 (우리은행 / 하나은행 / 경남은행)
-  let bank = 'woori';
-  if (text.includes('하나')) bank = 'hana';
-  else if (text.includes('경남')) bank = 'kyongnam';
-  else if (text.includes('우리')) bank = 'woori';
-
-  const isDeposit = text.includes('입금') || (!text.includes('출금') && !text.includes('지급'));
-
-  // 내부 통장 간 이체 자동 감지
-  if ((bank === 'woori' && isDeposit && /하나|경남|내통장|집금/.test(text)) ||
-      ((bank === 'hana' || bank === 'kyongnam') && !isDeposit && /우리|내통장|집금/.test(text))) {
-    if (parsedBalance !== null) db.balances[bank] = parsedBalance;
-    const tx = {
-      id: 'tx-' + Date.now(),
-      datetime: nowStr,
-      type: 'INTERNAL_TRANSFER',
-      bank,
-      rawSender: '통장 간 내부이체',
-      category: 'INTERNAL_TRANSFER',
-      amount: primaryAmount,
-      balanceAfter: db.balances[bank],
-      memo: '내부 자금이동 (수입·지출 중복 합산에서 자동 제외됨)'
-    };
-    db.transactions.unshift(tx);
-    db.balances.updatedAt = nowStr;
-    return { ok: true, parsedType: 'INTERNAL_TRANSFER', tx };
-  }
-
-  if (isDeposit) {
-    // 입금 처리
-    if (parsedBalance !== null) {
-      db.balances[bank] = parsedBalance;
-    } else {
-      db.balances[bank] += primaryAmount;
-    }
-
-    let category = 'CASH_TRANSFER';
-    let memo = '고객 계좌이체 현금수입';
-    let subBreakdown = null;
-    let rawSender = '입금';
-
-    if (text.includes('갤럭시아')) {
-      category = 'PG_SETTLEMENT';
-      rawSender = '갤럭시아머니트리';
-      const r = db.settings.pgSplitRatio;
-      subBreakdown = {
-        card: Math.round(primaryAmount * r.card),
-        naver: Math.round(primaryAmount * r.naver),
-        kakao: primaryAmount - Math.round(primaryAmount * r.card) - Math.round(primaryAmount * r.naver),
-        fee: Math.round(primaryAmount * r.feeRate)
-      };
-      memo = `갤럭시아PG 정산 (카드 ${(subBreakdown.card/10000).toFixed(0)}만 / N페이 ${(subBreakdown.naver/10000).toFixed(0)}만 / 카카오 ${(subBreakdown.kakao/10000).toFixed(0)}만)`;
-    } else if (/신한카드|삼성카드|현대카드|국민카드|비씨카드|롯데카드|하나카드/.test(text)) {
-      category = 'WIRELESS_CARD';
-      const m = text.match(/(신한카드|삼성카드|현대카드|국민카드|비씨카드|롯데카드|하나카드)/);
-      rawSender = m ? m[1] : '카드사정산';
-      memo = '무선단말기 카드사 정산금 입금';
-    } else if (/강남언니|힐링페이퍼/.test(text)) {
-      category = 'PLATFORM_GANGNAM';
-      rawSender = '강남언니(힐링페이퍼)';
-      memo = '강남언니 플랫폼 정산금 (경남은행)';
-    } else if (/언니가이드/.test(text)) {
-      category = 'PLATFORM_UNNI';
-      rawSender = '언니가이드';
-      memo = '언니가이드 플랫폼 정산금 (경남은행)';
-    } else {
-      category = 'CASH_TRANSFER';
-      rawSender = bank === 'hana' ? '고객 현금이체' : '기타 입금';
-      memo = '하나은행 고객 직접 계좌이체 (현금수입)';
-    }
-
-    const tx = {
-      id: 'tx-' + Date.now(),
-      datetime: nowStr,
-      type: 'BANK_IN',
-      bank,
-      rawSender,
-      category,
-      subBreakdown,
-      amount: primaryAmount,
-      balanceAfter: db.balances[bank],
-      memo
-    };
-    db.transactions.unshift(tx);
-    db.balances.updatedAt = nowStr;
-    return { ok: true, parsedType: 'BANK_IN', tx };
-  } else {
-    // 출금 처리 (주로 우리은행)
-    if (parsedBalance !== null) {
-      db.balances[bank] = parsedBalance;
-    } else {
-      db.balances[bank] -= primaryAmount;
-    }
-
-    let category = 'EXP_OTHER';
-    let rawSender = '우리은행 출금';
-    let memo = '병원 운영 지출 출금';
-
-    if (/급여|월급|인건비/.test(text)) {
-      category = 'EXP_PAYROLL';
-      rawSender = '직원 급여 (5일)';
-      memo = '매월 5일 직원 급여 출금 (전월 귀속 인건비)';
-    } else if (/리스|캐피탈|렌탈/.test(text)) {
-      category = 'EXP_LEASE';
-      rawSender = '장비 리스료 (5일)';
-      memo = '매월 5일 의료장비 리스료 출금';
-    } else if (/원천세|4대보험|건강보험|국민연금|세금/.test(text)) {
-      category = 'EXP_TAX_INS';
-      rawSender = '원천세·4대보험 (10일)';
-      memo = '매월 10일 원천세·4대보험 출금';
-    } else if (/경남카드|경남BC|카드대금/.test(text)) {
-      category = 'CARD_BILL_SETTLEMENT';
-      rawSender = '사업자카드 출금 (14·20일)';
-      memo = '사업자 신용카드 대금 자동출금 완료';
-    } else if (/메디|제약|약품|재료|도매/.test(text)) {
-      category = 'EXP_SUPPLY_CASH';
-      rawSender = '재료비 현금이체 (20일)';
-      memo = '거래처 의약품·소모품 현금이체 결제';
-    }
-
-    const tx = {
-      id: 'tx-' + Date.now(),
-      datetime: nowStr,
-      type: 'BANK_OUT',
-      bank,
-      rawSender,
-      category,
-      amount: primaryAmount,
-      balanceAfter: db.balances[bank],
-      memo
-    };
-    db.transactions.unshift(tx);
-    db.balances.updatedAt = nowStr;
-    return { ok: true, parsedType: 'BANK_OUT', tx };
+  try {
+    return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+  } catch (e) {
+    return {};
   }
 }
 
-const server = http.createServer((req, res) => {
+function saveConfig(cfg) {
+  fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2), 'utf8');
+}
+
+// 스마트 자동수집 폴더(data/inbox) 감시: 은행 빠른조회/갤럭시아/홈택스 파일이 들어오면 자동 파싱 & 클라우드 동기화
+function scanInboxFolder() {
+  try {
+    const files = fs.readdirSync(INBOX_DIR).filter(f => {
+      const full = path.join(INBOX_DIR, f);
+      return fs.statSync(full).isFile() && /\.(csv|txt|tsv)$/i.test(f);
+    });
+    if (files.length === 0) return { processedFiles: 0, addedRecords: 0 };
+
+    const db = loadDb();
+    let totalAdded = 0;
+    for (const file of files) {
+      const fullPath = path.join(INBOX_DIR, file);
+      const content = fs.readFileSync(fullPath, 'utf8');
+      const res = parseBatchRecords(content, db);
+      totalAdded += res.addedCount;
+      const destPath = path.join(PROCESSED_DIR, `${Date.now()}_${file}`);
+      fs.renameSync(fullPath, destPath);
+    }
+
+    if (totalAdded > 0) {
+      saveDb(db);
+      pushStateToGoogleSheet(db);
+    }
+    return { processedFiles: files.length, addedRecords: totalAdded };
+  } catch (err) {
+    return { processedFiles: 0, addedRecords: 0, error: err.message };
+  }
+}
+
+setInterval(scanInboxFolder, 3000);
+
+function readJsonBody(req) {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        resolve(JSON.parse(body || '{}'));
+      } catch (e) {
+        reject(e);
+      }
+    });
+  });
+}
+
+const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -354,43 +184,108 @@ const server = http.createServer((req, res) => {
     return res.end();
   }
 
-  // API: 대시보드 전체 데이터 조회
-  if (req.method === 'GET' && req.url === '/api/state') {
+  // API 1: 현재 대시보드 상태 조회
+  if (req.method === 'GET' && req.url.startsWith('/api/state')) {
+    const inboxRes = scanInboxFolder();
     const db = loadDb();
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-    return res.end(JSON.stringify(db));
+    return res.end(JSON.stringify({ ok: true, inboxRes, state: db }));
   }
 
-  // API: 실시간 문자(SMS/알림) 수신 웹훅 (갤럭시 폴드5 앱 & 웹 시뮬레이터 공용)
-  if (req.method === 'POST' && req.url === '/api/webhook/sms') {
-    let body = '';
-    req.on('data', chunk => { body += chunk; });
-    req.on('end', () => {
-      try {
-        const payload = JSON.parse(body || '{}');
-        const db = loadDb();
-        const result = parseIncomingSms(payload.text || payload.message || '', db);
-        saveDb(db);
+  // API 2: 대시보드 상태 저장 & 구글 시트(폴드5 열람용) 자동 동기화
+  if (req.method === 'POST' && req.url === '/api/state') {
+    try {
+      const payload = await readJsonBody(req);
+      if (payload && payload.state) {
+        saveDb(payload.state);
+        const cloudRes = await pushStateToGoogleSheet(payload.state);
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ ...result, state: db }));
-      } catch (err) {
-        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ ok: false, error: err.message }));
+        return res.end(JSON.stringify({ ok: true, cloudRes, state: payload.state }));
       }
-    });
-    return;
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      return res.end(JSON.stringify({ ok: false, error: 'Missing state object' }));
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      return res.end(JSON.stringify({ ok: false, error: err.message }));
+    }
   }
 
-  // API: 초기 데이터 리셋
+  // API 3: PC 자동 수집 로봇 배치 파싱 & 클라우드 동기화
+  if (req.method === 'POST' && req.url === '/api/collect/batch') {
+    try {
+      const payload = await readJsonBody(req);
+      const db = loadDb();
+      const inboxRes = scanInboxFolder();
+      let batchRes = { addedCount: 0, pgActualCount: 0 };
+      if (payload.content) {
+        batchRes = parseBatchRecords(payload.content, db);
+      }
+      saveDb(db);
+      const cloudRes = await pushStateToGoogleSheet(db);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      return res.end(JSON.stringify({
+        ok: true,
+        addedCount: batchRes.addedCount + inboxRes.addedRecords,
+        pgActualCount: batchRes.pgActualCount,
+        cloudRes,
+        state: db
+      }));
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      return res.end(JSON.stringify({ ok: false, error: err.message }));
+    }
+  }
+
+  // API 4: 단건 텍스트/문자 파싱
+  if (req.method === 'POST' && req.url === '/api/webhook/sms') {
+    try {
+      const payload = await readJsonBody(req);
+      const db = loadDb();
+      const result = parseSingleTextLine(payload.text || payload.message || '', db);
+      saveDb(db);
+      const cloudRes = await pushStateToGoogleSheet(db);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      return res.end(JSON.stringify({ ...result, cloudRes, state: db }));
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      return res.end(JSON.stringify({ ok: false, error: err.message }));
+    }
+  }
+
+  // API 5: PC 수집기 설정 조회/저장 (Git 추적 제외 로컬 파일)
+  if (req.method === 'GET' && req.url === '/api/config') {
+    const cfg = loadConfig();
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    return res.end(JSON.stringify({ ok: true, config: cfg }));
+  }
+
+  if (req.method === 'POST' && req.url === '/api/config') {
+    try {
+      const payload = await readJsonBody(req);
+      const cfg = loadConfig();
+      const updated = Object.assign({}, cfg, payload);
+      saveConfig(updated);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      return res.end(JSON.stringify({ ok: true, config: updated }));
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      return res.end(JSON.stringify({ ok: false, error: err.message }));
+    }
+  }
+
+  // API 6: 초기 데이터 리셋
   if (req.method === 'POST' && req.url === '/api/reset') {
     saveDb(INITIAL_DB);
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     return res.end(JSON.stringify({ ok: true, state: INITIAL_DB }));
   }
 
-  // 정적 파일 서빙 (public/index.html 등)
-  let filePath = req.url === '/' ? '/index.html' : req.url.split('?')[0];
-  const fullPath = path.join(__dirname, 'public', filePath);
+  // 정적 파일 서빙 (루트 index.html 우선, 없으면 public/)
+  let reqPath = req.url === '/' ? '/index.html' : req.url.split('?')[0];
+  let fullPath = path.join(__dirname, reqPath);
+  if (!fs.existsSync(fullPath) || !fs.statSync(fullPath).isFile()) {
+    fullPath = path.join(__dirname, 'public', reqPath);
+  }
 
   if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
     const ext = path.extname(fullPath).toLowerCase();
@@ -408,6 +303,7 @@ const server = http.createServer((req, res) => {
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`Clinic Cashflow Dashboard Server running at http://localhost:${PORT}`);
+server.listen(PORT, HOST, () => {
+  console.log(`[PC 자동수집 서버 가동] http://${HOST}:${PORT}`);
+  console.log(`[스마트 자동수집 폴더] ${INBOX_DIR}`);
 });
