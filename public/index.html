@@ -69,15 +69,15 @@
     <div class="flex flex-wrap items-center justify-between gap-2 bg-[var(--card)] border border-[var(--border)] rounded-xl p-3">
       <div class="flex flex-wrap items-center gap-2">
         <span class="px-2.5 py-1 text-xs font-bold rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)]">🚩 공식 기준일: 매월 24일 (23일 경남카드 출금 직후)</span>
-        <span class="px-2 py-0.5 text-xs rounded bg-[var(--secondary)] text-[var(--success)] font-semibold">🔗 팝빌 2계좌 자동연동 (우리 · 경남)</span>
+        <span class="px-2 py-0.5 text-xs rounded bg-[var(--secondary)] text-[var(--success)] font-semibold">📂 엑셀(우리·경남) 0원 자동분류</span>
       </div>
 
       <div class="flex flex-wrap items-center gap-1.5">
         <button type="button" onclick="switchTopPanel('whatif')" class="px-2.5 py-1.5 text-xs font-bold rounded-lg bg-[var(--warning)] text-black transition hover:opacity-90">
           🧪 시뮬레이터 · ⚙️ 초기값
         </button>
-        <button type="button" onclick="switchTopPanel('popbill')" class="px-2.5 py-1.5 text-xs font-bold rounded-lg bg-[var(--secondary)] text-[var(--secondary-foreground)] transition hover:opacity-90">
-          🔗 팝빌 · ☁️ 폴드5 연결
+        <button type="button" onclick="switchTopPanel('excel')" class="px-2.5 py-1.5 text-xs font-bold rounded-lg bg-[var(--success)] text-black transition hover:opacity-90">
+          📂 엑셀 올리기 · ☁️ 폴드5
         </button>
         <button type="button" id="btn-mode-folded" onclick="setScreenMode('folded')" class="px-2.5 py-1.5 text-xs rounded-lg bg-[var(--secondary)] text-[var(--secondary-foreground)] transition">
           📱 폴드5(접음)
@@ -125,36 +125,37 @@
 
     <div id="sim-toast" class="hidden p-2.5 rounded-xl bg-[var(--secondary)] text-xs font-semibold text-[var(--success)]"></div>
 
-    <!-- PANEL 1: 🔗 팝빌 API 연동 · 실잔액 보정 · 폴드5 구글시트 동기화 (기본 접힘) -->
-    <div id="top-panel-popbill" class="bg-[var(--card)] border-2 border-[var(--primary)] rounded-xl p-4 space-y-4 hidden text-xs">
+    <!-- PANEL 1: 📂 우리·경남 엑셀(.xls/.csv) 업로드 · 중복검증 · 폴드5 동기화 (기본 접힘) -->
+    <div id="top-panel-excel" class="bg-[var(--card)] border-2 border-[var(--success)] rounded-xl p-4 space-y-4 hidden text-xs">
       <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--card-border)] pb-3">
         <div class="flex flex-wrap items-center gap-2">
-          <span class="px-2 py-0.5 rounded bg-[var(--primary)] text-[var(--primary-foreground)] font-bold">팝빌 2계좌 자동수집 + 폴드5 동기화</span>
+          <span class="px-2 py-0.5 rounded bg-[var(--success)] text-black font-bold">월 0원 · 엑셀 자동분류 & 중복방지</span>
           <span id="real-mode-badge" class="text-[var(--warning)] font-semibold">⚠️ 테스트용 가상 샘플</span>
         </div>
         <button type="button" onclick="switchTopPanel('none')" class="text-[var(--muted-foreground)] hover:underline">▲ 패널 접기</button>
       </div>
 
-      <!-- Popbill API Key Form -->
-      <div class="p-3 rounded-xl bg-[var(--background)] border border-[var(--border)] space-y-2.5">
+      <!-- Excel Upload & Quick Bank Links -->
+      <div class="p-3 rounded-xl bg-[var(--background)] border border-[var(--primary)] space-y-2.5">
         <div class="flex flex-wrap items-center justify-between gap-2">
-          <div class="font-bold text-[var(--primary)]">1. 팝빌 API 키 등록 (이메일로 받은 LinkID / SecretKey 입력)</div>
-          <span id="cfg-pb-status" class="text-[var(--muted-foreground)]">키 발급 대기중</span>
+          <div class="font-bold text-[var(--primary)]">1. 은행 엑셀 파일 올리기 (항상 '이번 달 1일 ~ 오늘'로 받아도 중복 자동 제외)</div>
+          <div class="flex flex-wrap gap-1.5">
+            <button type="button" onclick="openBankFastQuery('woori')" class="px-2.5 py-1 rounded-lg bg-[var(--secondary)] hover:opacity-90 font-semibold">
+              🟦 우리 빠른조회 열기 (계좌복사)
+            </button>
+            <button type="button" onclick="openBankFastQuery('kyongnam')" class="px-2.5 py-1 rounded-lg bg-[var(--secondary)] hover:opacity-90 font-semibold">
+              🟧 경남 계좌번호 복사
+            </button>
+          </div>
         </div>
-        <div class="grid grid-cols-1 sm:grid-cols-5 gap-2 items-center">
-          <input id="cfg-pb-corp" type="text" value="4191402489" placeholder="사업자번호 (숫자만)" class="bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 font-mono" />
-          <input id="cfg-pb-linkid" type="text" placeholder="LinkID (예: TESTER...)" class="bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 font-mono" />
-          <input id="cfg-pb-secret" type="password" placeholder="SecretKey" class="bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 font-mono" />
-          <label class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[var(--card)] border border-[var(--border)] cursor-pointer">
-            <input id="cfg-pb-test" type="checkbox" checked class="accent-[var(--primary)]" />
-            <span>테스트(무상) 모드</span>
+        <div class="flex flex-wrap items-center gap-2">
+          <label class="px-4 py-2 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] font-bold cursor-pointer hover:opacity-90">
+            📂 우리·경남 엑셀(.xls / .csv) 파일 선택하여 바로 반영
+            <input id="excel-file-input" type="file" accept=".xls,.xlsx,.csv,.txt,.tsv,.html,.htm" onchange="handleFileUpload(event)" class="hidden" />
           </label>
-          <button type="button" onclick="savePopbillConfig()" class="px-3 py-1.5 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] font-bold">
-            💾 팝빌 키 저장
-          </button>
-        </div>
-        <div class="text-[11px] text-[var(--muted-foreground)]">
-          * 연동 계좌: <b>우리은행 1005-104-863854</b> · <b>경남은행 207-0172-8715-04</b> (API 키는 이 PC의 <code>config/collector_config.json</code>에만 저장됩니다)
+          <span class="text-[11px] text-[var(--muted-foreground)]">
+            * 우리은행(1005-104-863854) 엑셀 그대로 올리시면 <b>급여·리스·세금·카드·갤럭시아·잔액</b>이 자동 분류되고, 이미 들어간 날짜/건은 자동 건너뜁니다.
+          </span>
         </div>
       </div>
 
@@ -1023,7 +1024,7 @@
     }
 
     function switchTopPanel(panel) {
-      const panels = ['whatif', 'popbill'];
+      const panels = ['whatif', 'excel'];
       panels.forEach(function(p) {
         const el = document.getElementById('top-panel-' + p);
         if (!el) return;
@@ -1357,27 +1358,250 @@
       toast.classList.remove('hidden');
     }
 
+    function decodeBankBuffer(buffer) {
+      const utf8Text = new TextDecoder('utf-8').decode(buffer);
+      if (utf8Text.includes('거래일시') || utf8Text.includes('계좌번호') || utf8Text.includes('일자')) {
+        return utf8Text;
+      }
+      try {
+        return new TextDecoder('euc-kr').decode(buffer);
+      } catch (e) {
+        return utf8Text;
+      }
+    }
+
+    function openBankFastQuery(bank) {
+      const acct = bank === 'kyongnam' ? '2070172871504' : '1005104863854';
+      const label = bank === 'kyongnam' ? '경남은행(207-0172-8715-04)' : '우리은행(1005-104-863854)';
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(acct).catch(function() {});
+      }
+      if (bank === 'woori') {
+        window.open('https://spib.wooribank.com/pib/Dream?withyou=CMSPD0010', '_blank', 'noopener');
+      }
+      const toast = document.getElementById('sim-toast');
+      if (toast) {
+        toast.textContent = '🏦 ' + label + ' 계좌번호(' + acct + ')가 복사되었습니다!' + (bank === 'woori' ? ' 조회 후 [엑셀저장] 파일을 올려주세요.' : '');
+        toast.classList.remove('hidden');
+      }
+    }
+
+    function importBankHtmlTable(htmlText) {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(htmlText, 'text/html');
+      const fullText = doc.body ? doc.body.textContent : htmlText;
+
+      const acctMatch = fullText.match(/계좌번호\s*[:：]\s*([0-9-]+)/);
+      const detectedAcct = acctMatch ? acctMatch[1].trim() : '';
+      let bank = 'woori';
+      if (detectedAcct) {
+        const digits = detectedAcct.replace(/\D/g, '');
+        if (digits === '2070172871504') {
+          bank = 'kyongnam';
+        } else if (digits === '1005104863854') {
+          bank = 'woori';
+        } else {
+          return { error: '지정 계좌(우리 1005-104-863854 / 경남 207-0172-8715-04)가 아닌 타 계좌(' + detectedAcct + ') 파일입니다.' };
+        }
+      }
+
+      const tables = Array.from(doc.querySelectorAll('table'));
+      let targetRows = [];
+      for (let i = 0; i < tables.length; i++) {
+        const rows = Array.from(tables[i].querySelectorAll('tr'));
+        const hasHeader = rows.some(function(r) {
+          const t = r.textContent || '';
+          return t.includes('거래일시') && (t.includes('찾으신금액') || t.includes('출금')) && (t.includes('맡기신금액') || t.includes('입금'));
+        });
+        if (hasHeader) {
+          targetRows = rows;
+          break;
+        }
+      }
+      if (!targetRows.length) return null;
+
+      if (!appState.settings.realDataMode) {
+        resetToRealWooriOnly();
+      }
+      if (!Array.isArray(appState.processedIds)) appState.processedIds = [];
+
+      let addedCount = 0;
+      let dupCount = 0;
+      let latestDt = '';
+      let latestBal = null;
+      const acctKey = detectedAcct || (bank === 'kyongnam' ? '207-0172-8715-04' : '1005-104-863854');
+      const kwList = String(appState.settings.internalKeywords || '집금,내통장,내부,피부과').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+
+      targetRows.forEach(function(tr) {
+        const cells = Array.from(tr.querySelectorAll('td')).map(function(td) { return (td.textContent || '').trim(); });
+        if (cells.length < 6) return;
+        const dt = cells[0];
+        if (!/^\d{4}[.\-/]\d{2}[.\-/]\d{2}/.test(dt)) return;
+        const summary = cells[1] || '';
+        const desc = cells[2] || '';
+        const outAmt = parseInt((cells[3] || '').replace(/[^0-9]/g, ''), 10) || 0;
+        const inAmt = parseInt((cells[4] || '').replace(/[^0-9]/g, ''), 10) || 0;
+        const balRaw = (cells[5] || '').replace(/[^0-9]/g, '');
+        const bal = balRaw ? parseInt(balRaw, 10) : null;
+
+        if (outAmt === 0 && inAmt === 0 && bal === null) return;
+
+        if (bal !== null && dt >= latestDt) {
+          latestDt = dt;
+          latestBal = bal;
+        }
+
+        const fp = bank + '|' + acctKey + '|' + dt + '|' + outAmt + '|' + inAmt + '|' + (bal !== null ? bal : '') + '|' + summary + '|' + desc;
+        if (appState.processedIds.indexOf(fp) !== -1) {
+          dupCount += 1;
+          return;
+        }
+        appState.processedIds.push(fp);
+        if (outAmt === 0 && inAmt === 0) return;
+
+        const shortDt = dt.slice(5, 16).replace(/\./g, '/');
+        const combined = summary + ' ' + desc;
+        let badge = bank === 'kyongnam' ? '🟧 경남' : '🟦 우리';
+        let txType = inAmt > 0 ? 'BANK_IN' : 'BANK_OUT';
+        let sub = summary;
+
+        if (inAmt > 0) {
+          if (/갤럭시아/i.test(combined)) {
+            appState.inflowTotals.pgCard += inAmt;
+            badge = '🟦 갤럭시아PG';
+            sub = 'PG 정산입금';
+          } else if (/위챗|알리|KSNET|ＫＳＮＥＴ/i.test(combined)) {
+            appState.inflowTotals.pgCard += inAmt;
+            badge = '🟦 간편결제PG';
+            sub = '위챗/알리(KSNET) 정산';
+          } else if (/김대윤|유픽의원/.test(combined)) {
+            appState.inflowTotals.cashHana += inAmt;
+            badge = '💵 현금입금';
+            sub = '원장님 직접 현금입금';
+          } else if (/^(KB|하나|NH|현대|BC|신한|우|삼성|롯데)/i.test(desc) || /캐시백/.test(combined)) {
+            appState.inflowTotals.wirelessCard += inAmt;
+            badge = '💳 단말기정산';
+            sub = '카드사 단말기 정산';
+          } else {
+            appState.inflowTotals.pgCard += inAmt;
+            badge = '🟦 기타입금';
+          }
+        } else if (outAmt > 0) {
+          const isInternal = (/김대윤/.test(desc) && !/국고|서울특징/.test(desc)) || kwList.some(function(kw) { return combined.includes(kw); });
+          const dayNum = parseInt(dt.slice(8, 10), 10) || 0;
+
+          if (isInternal) {
+            badge = '🔄 내부/본인이체';
+            sub = '경비 제외 (본인·내부이체)';
+          } else if (/오릭스|캐피탈|ＢＮＫ캐피탈|BNK캐피탈|리스/i.test(combined)) {
+            appState.outflowTotals.lease = (appState.outflowTotals.lease || 0) + outAmt;
+            badge = '⚙️ 장비리스료';
+            sub = '5일 리스 출금';
+          } else if (/국고|서울특징|국민연금|건강보험|고용보험|산재보험|원천세|지방세/i.test(combined)) {
+            appState.outflowTotals.taxInsRent = (appState.outflowTotals.taxInsRent || 0) + outAmt;
+            badge = '🏛️ 세금·4대보험';
+            sub = '10일 세금·공과금';
+          } else if (/임대|월세|관리비/i.test(combined)) {
+            appState.outflowTotals.rent = (appState.outflowTotals.rent || 0) + outAmt;
+            badge = '🏢 임대료';
+            sub = '25일경 임대료 이체';
+          } else if (/삼성카드|우리카드|롯데카드|신한카드|ＫＢ카드|KB카드|현대카드|경남카드/i.test(combined)) {
+            if (/삼성카드/i.test(combined)) appState.cards.card13.currentMonthSwipes += outAmt;
+            else if (/경남카드/i.test(combined)) appState.cards.card23.currentMonthSwipes += outAmt;
+            else appState.cards.card14.currentMonthSwipes += outAmt;
+            appState.outflowTotals.welfareOtherCard += outAmt;
+            badge = '💳 카드대금출금';
+            sub = '사업자카드 결제출금';
+          } else if (/힐링페이퍼|힐링페|강남언니|바비톡|네이버|메타|크리에이트/i.test(combined)) {
+            appState.outflowTotals.marketingCard += outAmt;
+            badge = '📢 마케팅비';
+            sub = '광고·플랫폼 비용';
+          } else if ((dayNum >= 4 && dayNum <= 6 && /모바일/.test(summary)) || /^(하나|신한|국민|우리|토뱅|카카|농협)[가-힣A-Z\s]{2,12}$/.test(desc) && outAmt >= 500000) {
+            appState.outflowTotals.payroll = (appState.outflowTotals.payroll || 0) + outAmt;
+            badge = '👥 급여';
+            sub = '5일 직원 급여이체';
+          } else {
+            appState.outflowTotals.welfareOtherCard += outAmt;
+            badge = '📌 운영·기타';
+          }
+        }
+
+        appState.transactions.unshift({
+          id: fp,
+          datetime: shortDt,
+          type: txType,
+          badge: badge,
+          title: maskCustomerName(desc || summary || '거래내역'),
+          sub: sub,
+          amount: inAmt > 0 ? inAmt : outAmt
+        });
+        addedCount += 1;
+      });
+
+      if (latestBal !== null) {
+        appState.balances[bank] = latestBal;
+        appState.balances.updatedAt = (bank === 'kyongnam' ? '경남 ' : '우리 ') + latestDt.slice(5, 16) + ' 엑셀반영';
+      }
+      if (appState.transactions.length > 150) {
+        appState.transactions = appState.transactions.slice(0, 150);
+      }
+
+      syncInputsFromState();
+      safeSaveState();
+      renderAll(true);
+      flashBox(bank === 'kyongnam' ? 'sb-box-kyongnam' : 'sb-box-woori');
+      return { addedCount: addedCount, dupCount: dupCount, latestBal: latestBal, bank: bank };
+    }
+
     function handleFileUpload(event) {
       const file = event.target.files && event.target.files[0];
       if (!file) return;
       const reader = new FileReader();
       reader.onload = function(e) {
-        const content = String(e.target.result || '');
-        const lines = content.split(/\r?\n/).map(function(l) { return l.trim(); }).filter(Boolean);
+        const text = decodeBankBuffer(e.target.result);
+        const toast = document.getElementById('sim-toast');
+
+        if (/<table/i.test(text) && text.includes('거래일시')) {
+          const res = importBankHtmlTable(text);
+          if (res && res.error) {
+            toast.textContent = '⚠️ ' + res.error;
+            toast.classList.remove('hidden');
+            event.target.value = '';
+            return;
+          }
+          if (res) {
+            toast.textContent = '✅ [' + file.name + '] 신규 ' + res.addedCount + '건 반영 완료!' +
+              (res.dupCount > 0 ? ' (중복 기간 ' + res.dupCount + '건 자동 제외됨)' : '') +
+              (res.latestBal !== null ? ' · 최신 잔액 ' + fmtWon(res.latestBal) : '');
+            toast.classList.remove('hidden');
+            event.target.value = '';
+            return;
+          }
+        }
+
+        const lines = text.split(/\r?\n/).map(function(l) { return l.trim(); }).filter(Boolean);
         let count = 0;
+        let dupCount = 0;
         let excludedWoori = 0;
         lines.forEach(function(line) {
           if (!/^(거래일시|승인일시|결제일자|일자|번호|구분|은행명),/.test(line)) {
-            const res = processRecordText(line);
+            const fp = 'line|' + line;
+            if (appState.processedIds.indexOf(fp) !== -1) {
+              dupCount += 1;
+              return;
+            }
+            const res = processRecordText(line, fp);
             if (res === 'EXCLUDED_WOORI') excludedWoori += 1;
             else count += 1;
           }
         });
-        const toast = document.getElementById('sim-toast');
-        toast.textContent = '📂 [' + file.name + '] 파일에서 총 ' + count + '건 반영 완료!' + (excludedWoori > 0 ? ' (타 우리은행 계좌 ' + excludedWoori + '건 자동 제외됨)' : '');
+        toast.textContent = '📂 [' + file.name + '] 신규 ' + count + '건 반영 완료!' +
+          (dupCount > 0 ? ' (중복 ' + dupCount + '건 자동 제외)' : '') +
+          (excludedWoori > 0 ? ' (타계좌 ' + excludedWoori + '건 제외)' : '');
         toast.classList.remove('hidden');
+        event.target.value = '';
       };
-      reader.readAsText(file, 'utf-8');
+      reader.readAsArrayBuffer(file);
     }
 
     function applySimPreset(supplyPct, mktPct, revPct, fixedMan) {
@@ -2098,33 +2322,13 @@
       }
       renderAll(false);
 
-      // 로컬 PC 서버(127.0.0.1:3080) 연결 시 서버 원장 및 설정 상태 자동 동기화
+      // 로컬 PC 서버(127.0.0.1:3080) 연결 시 서버 원장 자동 동기화
       fetch(LOCAL_API_BASE + '/api/state')
         .then(function(r) { return r.json(); })
         .then(function(data) {
           if (data && data.ok && data.state) {
             appState = data.state;
             renderAll(false);
-          }
-        })
-        .catch(function() {});
-
-      fetch(LOCAL_API_BASE + '/api/config')
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-          if (data && data.ok && data.config && data.config.popbill) {
-            const pb = data.config.popbill;
-            const corpEl = document.getElementById('cfg-pb-corp');
-            const linkEl = document.getElementById('cfg-pb-linkid');
-            const testEl = document.getElementById('cfg-pb-test');
-            const statusEl = document.getElementById('cfg-pb-status');
-            if (corpEl && pb.corpNum) corpEl.value = pb.corpNum;
-            if (linkEl && pb.linkId) linkEl.value = pb.linkId;
-            if (testEl) testEl.checked = Boolean(pb.isTest);
-            if (statusEl && pb.linkId && pb.hasSecretKey) {
-              statusEl.className = 'text-[var(--success)] font-semibold';
-              statusEl.textContent = '✅ 팝빌 키 연동됨 (' + (pb.isTest ? '테스트 모드' : '운영 모드') + ')';
-            }
           }
         })
         .catch(function() {});
