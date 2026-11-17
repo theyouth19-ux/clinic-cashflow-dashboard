@@ -1587,6 +1587,16 @@
         }
       }
 
+      const atMaxByYm = {};
+      parsedRaw.forEach(function(r) {
+        if (!r.cancelled && r.outAmt > 0 && /주식회사 에이티/.test(r.desc)) {
+          const rYm = r.dtNorm.slice(0, 7);
+          if (!atMaxByYm[rYm] || r.outAmt > atMaxByYm[rYm]) {
+            atMaxByYm[rYm] = r.outAmt;
+          }
+        }
+      });
+
       parsedRaw.forEach(function(row) {
         const dtNorm = row.dtNorm;
         const ym = dtNorm.slice(0, 7);
@@ -1676,19 +1686,51 @@
             else bucket.cards.card14.currentMonthSwipes += outAmt;
             badge = '💳 카드대금출금';
             sub = '사업자카드 결제출금';
-          } else if (/주식회사 에이티|씨메디|애브비|오멜론|재료/i.test(combined)) {
+          } else if (/주식회사 에이티/.test(combined)) {
+            if (/재료|물품/.test(combined) || (!/해외|국내|마케팅|수수료/.test(combined) && outAmt === atMaxByYm[ym])) {
+              bucket.cards.scheduledSupplyTransfer20 += outAmt;
+              badge = '💉 에이티움(재료비)';
+              sub = '에이티움 본사 재료·물품';
+            } else {
+              bucket.outflowTotals.marketingCard += outAmt;
+              badge = '📢 에이티움(수수료·마케팅)';
+              sub = '해외/국내 수수료·마케팅비';
+            }
+          } else if (/씨메디|애브비|오멜론|재료/i.test(combined)) {
             bucket.cards.scheduledSupplyTransfer20 += outAmt;
             badge = '💉 재료·약품이체';
-            sub = '에이티/애브비 등 거래처 이체';
-          } else if (/힐링페이퍼|힐링페|강남언니|바비톡|네이버|메타|크리에이트|레드테이블/i.test(combined)) {
+            sub = '애브비/씨메디 등 거래처';
+          } else if (/씨유이/.test(combined)) {
+            bucket.outflowTotals.marketingCard += outAmt;
+            badge = '📢 메이투안(씨유이)';
+            sub = '해외마케팅 전달수수료';
+          } else if (/힐링페이퍼|힐링페|언니가이드|강남언니|바비톡|네이버|메타|크리에이트|레드테이블/i.test(combined)) {
             bucket.outflowTotals.marketingCard += outAmt;
             badge = '📢 마케팅·유치비';
-            sub = '광고·강남언니·레드테이블';
+            sub = '강남언니·언니가이드·레드테이블';
           } else if (/글로벌텍스프리/i.test(combined)) {
             bucket.outflowTotals.welfareOtherCard += outAmt;
             badge = '🌐 택스리펀정산';
             sub = '글로벌텍스프리 정산출금';
-          } else if (/찬솔크린|서울위생|노무사|헤이페이|다우기술|렌탈케어|인텔릭스|KT통신|비즈플레이|대한의사협회|대출이자|한도미사용|KB손보|제이앤씨|한국의료분|Npay/i.test(combined)) {
+          } else if (/제이앤씨/.test(combined)) {
+            bucket.outflowTotals.welfareOtherCard += outAmt;
+            badge = '📻 무전기·소모품';
+            sub = '제이앤씨 수리/소모품비';
+          } else if (/박득남/.test(desc)) {
+            if (outAmt >= 500000) {
+              bucket.outflowTotals.payroll += outAmt;
+              badge = '👥 급여(부원장님)';
+              sub = '박득남 부원장님 급여';
+            } else {
+              bucket.outflowTotals.welfareOtherCard += outAmt;
+              badge = '🏥 원내 소액정산';
+              sub = '부원장님 소액 정산/경비';
+            }
+          } else if (/이유준|신현호|HONG SEU/i.test(desc)) {
+            bucket.outflowTotals.payroll += outAmt;
+            badge = '👥 급여(알바원장)';
+            sub = '알바원장님 급여';
+          } else if (/찬솔크린|서울위생|노무사|헤이페이|다우기술|렌탈케어|인텔릭스|KT통신|비즈플레이|대한의사협회|대출이자|한도미사용|KB손보|한국의료분|Npay/i.test(combined)) {
             bucket.outflowTotals.welfareOtherCard += outAmt;
             badge = '🏥 병원운영·고정비';
             sub = '청소/위생/대출/렌탈/보험';
@@ -1852,11 +1894,14 @@
           if (isInternal) {
             badge = '🔄 내부/본인이체';
             sub = '경비 제외 (본인·내부이체)';
+          } else if (/문혜연/.test(combined)) {
+            badge = '🏠 가사·생활비인출';
+            sub = '병원경비 제외 (가족 생활비)';
           } else if (/대출이자/.test(combined)) {
             bucket.outflowTotals.welfareOtherCard += outAmt;
             badge = '🏦 대출이자(경남)';
             sub = '경남은행 대출이자 출금';
-          } else if (/문혜연/.test(combined) || (dayNum >= 4 && dayNum <= 6 && outAmt >= 500000)) {
+          } else if (dayNum >= 4 && dayNum <= 6 && outAmt >= 500000) {
             bucket.outflowTotals.payroll += outAmt;
             badge = '👥 5일 정기자문·급여';
             sub = '매월 5일 지급';
