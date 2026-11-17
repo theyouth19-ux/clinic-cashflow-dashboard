@@ -333,12 +333,20 @@
           </div>
 
           <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
-            <label class="block text-[var(--muted-foreground)] mb-1">👥 5일 급여 + 장비리스료 (원)</label>
+            <label class="block text-[var(--muted-foreground)] mb-1">👥 5일 급여 (원)</label>
             <input id="inp-payroll" type="number" step="100000" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2 py-1 font-mono font-bold" />
           </div>
           <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
-            <label class="block text-[var(--muted-foreground)] mb-1">🏢 10일 세금·4대보험·임대료 (원)</label>
+            <label class="block text-[var(--muted-foreground)] mb-1">⚙️ 5일 장비리스료 (원)</label>
+            <input id="inp-lease" type="number" step="100000" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2 py-1 font-mono font-bold" />
+          </div>
+          <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+            <label class="block text-[var(--muted-foreground)] mb-1">🏛️ 10일 세금·4대보험 (원)</label>
             <input id="inp-taxins" type="number" step="100000" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2 py-1 font-mono font-bold" />
+          </div>
+          <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+            <label class="block text-[var(--muted-foreground)] mb-1">🏢 25일경 임대료 계좌이체 (원)</label>
+            <input id="inp-rent" type="number" step="100000" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2 py-1 font-mono font-bold" />
           </div>
           <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
             <label class="block text-[var(--muted-foreground)] mb-1">💳 13일 삼성카드 이달 누적 (원)</label>
@@ -472,7 +480,7 @@
               <div id="pnl-rev" class="font-mono font-bold text-sm mt-0.5">+9,640만</div>
             </div>
             <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
-              <div class="text-[var(--muted-foreground)]">② 5·10일 고정비</div>
+              <div class="text-[var(--muted-foreground)]">② 고정비(급여·리스·세금·임대)</div>
               <div id="pnl-cost" class="font-mono font-bold text-sm mt-0.5 text-[var(--error)]">-4,540만</div>
             </div>
             <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
@@ -512,17 +520,31 @@
             </div>
             <div class="py-2 flex items-center justify-between gap-2">
               <div class="truncate">
-                <span class="font-semibold">➖ 급여·리스료</span>
+                <span class="font-semibold">➖ 급여</span>
                 <span class="text-[var(--muted-foreground)] ml-1">(5일 출금)</span>
               </div>
-              <span id="row-pnl-payroll" class="font-mono font-bold text-[var(--error)] shrink-0">-28,500,000원</span>
+              <span id="row-pnl-payroll" class="font-mono font-bold text-[var(--error)] shrink-0">-22,000,000원</span>
             </div>
             <div class="py-2 flex items-center justify-between gap-2">
               <div class="truncate">
-                <span class="font-semibold">➖ 세금·4대보험·임대</span>
+                <span class="font-semibold">➖ 장비리스료</span>
+                <span class="text-[var(--muted-foreground)] ml-1">(5일 출금)</span>
+              </div>
+              <span id="row-pnl-lease" class="font-mono font-bold text-[var(--error)] shrink-0">-6,500,000원</span>
+            </div>
+            <div class="py-2 flex items-center justify-between gap-2">
+              <div class="truncate">
+                <span class="font-semibold">➖ 세금·4대보험</span>
                 <span class="text-[var(--muted-foreground)] ml-1">(10일 출금)</span>
               </div>
-              <span id="row-pnl-taxins" class="font-mono font-bold text-[var(--error)] shrink-0">-16,900,000원</span>
+              <span id="row-pnl-taxins" class="font-mono font-bold text-[var(--error)] shrink-0">-9,900,000원</span>
+            </div>
+            <div class="py-2 flex items-center justify-between gap-2">
+              <div class="truncate">
+                <span class="font-semibold">➖ 임대료</span>
+                <span class="text-[var(--muted-foreground)] ml-1">(25일경 계좌이체)</span>
+              </div>
+              <span id="row-pnl-rent" class="font-mono font-bold text-[var(--error)] shrink-0">-7,000,000원</span>
             </div>
             <div class="py-2 flex items-center justify-between gap-2">
               <div class="truncate">
@@ -802,8 +824,10 @@
         kakaoPay: 4600000
       },
       outflowTotals: {
-        payroll: 28500000,
-        taxInsRent: 16900000,
+        payroll: 22000000,
+        lease: 6500000,
+        taxInsRent: 9900000,
+        rent: 7000000,
         supplyCard: 7940000,
         marketingCard: 7800000,
         welfareOtherCard: 2900000
@@ -1337,7 +1361,7 @@
       const baseSupplyTotal = src.outflowTotals.supplyCard + src.cards.scheduledSupplyTransfer20;
       const baseMkt = src.outflowTotals.marketingCard;
       const baseWelfare = src.outflowTotals.welfareOtherCard;
-      const baseFixed = src.outflowTotals.payroll + src.outflowTotals.taxInsRent;
+      const baseFixed = (src.outflowTotals.payroll || 0) + (src.outflowTotals.lease || 0) + (src.outflowTotals.taxInsRent || 0) + (src.outflowTotals.rent || 0);
       const baseTax = Math.round(baseRev * src.settings.taxReserveRate);
       const baseProfit = baseRev - baseFixed - baseSupplyTotal - baseMkt - baseWelfare - baseTax;
 
@@ -1439,8 +1463,10 @@
       document.getElementById('inp-woori').value = appState.balances.woori;
       document.getElementById('inp-kyongnam').value = appState.balances.kyongnam;
       document.getElementById('inp-day24-base').value = (appState.settings.day24BaseBalance !== undefined && appState.settings.day24BaseBalance !== null) ? appState.settings.day24BaseBalance : 81200000;
-      document.getElementById('inp-payroll').value = appState.outflowTotals.payroll;
-      document.getElementById('inp-taxins').value = appState.outflowTotals.taxInsRent;
+      document.getElementById('inp-payroll').value = appState.outflowTotals.payroll || 0;
+      document.getElementById('inp-lease').value = appState.outflowTotals.lease || 0;
+      document.getElementById('inp-taxins').value = appState.outflowTotals.taxInsRent || 0;
+      document.getElementById('inp-rent').value = appState.outflowTotals.rent || 0;
       document.getElementById('inp-card13').value = appState.cards.card13.currentMonthSwipes;
       document.getElementById('inp-card14').value = appState.cards.card14.currentMonthSwipes;
       document.getElementById('inp-card23').value = appState.cards.card23.currentMonthSwipes;
@@ -1459,7 +1485,9 @@
       appState.balances.kyongnam = parseInt(document.getElementById('inp-kyongnam').value || '0', 10);
       appState.settings.day24BaseBalance = parseInt(document.getElementById('inp-day24-base').value || '81200000', 10);
       appState.outflowTotals.payroll = parseInt(document.getElementById('inp-payroll').value || '0', 10);
+      appState.outflowTotals.lease = parseInt(document.getElementById('inp-lease').value || '0', 10);
       appState.outflowTotals.taxInsRent = parseInt(document.getElementById('inp-taxins').value || '0', 10);
+      appState.outflowTotals.rent = parseInt(document.getElementById('inp-rent').value || '0', 10);
       appState.cards.card13.currentMonthSwipes = parseInt(document.getElementById('inp-card13').value || '0', 10);
       appState.cards.card14.currentMonthSwipes = parseInt(document.getElementById('inp-card14').value || '0', 10);
       appState.cards.card23.currentMonthSwipes = parseInt(document.getElementById('inp-card23').value || '0', 10);
@@ -1611,7 +1639,9 @@
       };
       appState.outflowTotals = {
         payroll: 0,
+        lease: 0,
         taxInsRent: 0,
+        rent: 0,
         supplyCard: 0,
         marketingCard: 0,
         welfareOtherCard: 0
@@ -1737,7 +1767,7 @@
       const totalCardSwipes = card13Swipes + card14Swipes + card23Swipes;
       const cashSupply20 = appState.cards.scheduledSupplyTransfer20;
 
-      const fixedCosts = appState.outflowTotals.payroll + appState.outflowTotals.taxInsRent;
+      const fixedCosts = (appState.outflowTotals.payroll || 0) + (appState.outflowTotals.lease || 0) + (appState.outflowTotals.taxInsRent || 0) + (appState.outflowTotals.rent || 0);
       const variableAndCardCosts = totalCardSwipes + cashSupply20;
       const taxReserve = Math.round(totalInflow * appState.settings.taxReserveRate);
       const netProfitCur = totalInflow - fixedCosts - variableAndCardCosts - taxReserve;
@@ -1794,8 +1824,10 @@
         document.getElementById('bep-bar').style.width = bepRatio + '%';
 
         document.getElementById('row-pnl-rev').textContent = '+' + fmtWon(totalInflow);
-        document.getElementById('row-pnl-payroll').textContent = '-' + fmtWon(appState.outflowTotals.payroll);
-        document.getElementById('row-pnl-taxins').textContent = '-' + fmtWon(appState.outflowTotals.taxInsRent);
+        document.getElementById('row-pnl-payroll').textContent = '-' + fmtWon(appState.outflowTotals.payroll || 0);
+        document.getElementById('row-pnl-lease').textContent = '-' + fmtWon(appState.outflowTotals.lease || 0);
+        document.getElementById('row-pnl-taxins').textContent = '-' + fmtWon(appState.outflowTotals.taxInsRent || 0);
+        document.getElementById('row-pnl-rent').textContent = '-' + fmtWon(appState.outflowTotals.rent || 0);
         document.getElementById('row-pnl-card13').textContent = '-' + fmtWon(card13Swipes);
         document.getElementById('row-pnl-card14').textContent = '-' + fmtWon(card14Swipes);
         document.getElementById('row-pnl-supplycash').textContent = '-' + fmtWon(cashSupply20);
@@ -1957,8 +1989,10 @@
       }).join('');
 
       const outItems = [
-        { label: '👥 급여·리스료 (5일 출금)', val: appState.outflowTotals.payroll, c: 'var(--chart-1)' },
-        { label: '🏢 세금·4대보험·임대 (10일)', val: appState.outflowTotals.taxInsRent, c: 'var(--chart-2)' },
+        { label: '👥 급여 (5일 출금)', val: appState.outflowTotals.payroll || 0, c: 'var(--chart-1)' },
+        { label: '⚙️ 장비리스료 (5일 출금)', val: appState.outflowTotals.lease || 0, c: 'var(--chart-1)' },
+        { label: '🏛️ 세금·4대보험 (10일 출금)', val: appState.outflowTotals.taxInsRent || 0, c: 'var(--chart-2)' },
+        { label: '🏢 임대료 계좌이체 (25일경)', val: appState.outflowTotals.rent || 0, c: 'var(--chart-2)' },
         { label: '💉 재료비 합계 (카드 + 20일 현금이체)', val: totalSupplyCost, c: 'var(--chart-3)' },
         { label: '📢 마케팅·광고비 (13·14·23일 카드)', val: appState.outflowTotals.marketingCard, c: 'var(--chart-4)' },
         { label: '🍱 식대·복리후생·기타 (카드)', val: appState.outflowTotals.welfareOtherCard, c: 'var(--chart-5)' }
