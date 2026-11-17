@@ -370,8 +370,12 @@
             <input id="inp-pending-in" type="number" step="100000" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2 py-1 font-mono font-bold" />
           </div>
           <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
-            <label class="block text-[var(--muted-foreground)] mb-1">⚖️ 월 세금적립률 (부가·종소세 %)</label>
-            <input id="inp-tax-rate" type="number" step="0.5" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2 py-1 font-mono font-bold" />
+            <label class="block text-[var(--muted-foreground)] mb-1">🧾 부가세 적립률 (매출 기준 %)</label>
+            <input id="inp-vat-rate" type="number" step="0.5" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2 py-1 font-mono font-bold" />
+          </div>
+          <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+            <label class="block text-[var(--muted-foreground)] mb-1">⚖️ 종소세 실효세율 (순이익 기준 %)</label>
+            <input id="inp-income-tax-rate" type="number" step="0.5" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2 py-1 font-mono font-bold" />
           </div>
         </div>
 
@@ -576,10 +580,17 @@
             </div>
             <div class="py-2 flex items-center justify-between gap-2">
               <div class="truncate">
-                <span class="font-semibold">➖ 부가·종소세 적립</span>
-                <span class="text-[var(--muted-foreground)] ml-1">(<span id="lbl-tax-rate">8.5</span>% 충당)</span>
+                <span class="font-semibold">➖ 부가세 적립</span>
+                <span class="text-[var(--muted-foreground)] ml-1">(<span id="lbl-vat-rate">5.0</span>% · 매출기준)</span>
               </div>
-              <span id="row-pnl-taxres" class="font-mono font-bold text-[var(--warning)] shrink-0">-8,194,000원</span>
+              <span id="row-pnl-vat" class="font-mono font-bold text-[var(--warning)] shrink-0">-4,820,000원</span>
+            </div>
+            <div class="py-2 flex items-center justify-between gap-2">
+              <div class="truncate">
+                <span class="font-semibold">➖ 종소세 적립</span>
+                <span class="text-[var(--muted-foreground)] ml-1">(<span id="lbl-income-tax-rate">33.0</span>% · 순이익기준)</span>
+              </div>
+              <span id="row-pnl-incometax" class="font-mono font-bold text-[var(--warning)] shrink-0">-6,448,200원</span>
             </div>
             <div class="pt-2.5 flex items-center justify-between gap-2 font-bold">
               <span>🚩 24일 공식기준 실질 순이익</span>
@@ -797,7 +808,8 @@
         realDataMode: false,
         pgSplitRatio: { card: 0.80, naver: 0.12, kakao: 0.08, feeRate: 0.028 },
         pgIsActual: false,
-        taxReserveRate: 0.085,
+        vatRate: 0.05,
+        incomeTaxRate: 0.33,
         internalKeywords: '집금,내통장,내부,피부과',
         webhookUrl: '',
         secretToken: 'clinic-24'
@@ -972,6 +984,28 @@
         return eok + '억 ' + rem.toLocaleString('ko-KR') + '만';
       }
       return man.toLocaleString('ko-KR') + '만';
+    }
+
+    function getTaxRates(s) {
+      const vatRate = (s && s.vatRate !== undefined) ? s.vatRate : 0.05;
+      const incomeTaxRate = (s && s.incomeTaxRate !== undefined) ? s.incomeTaxRate : 0.33;
+      return { vatRate: vatRate, incomeTaxRate: incomeTaxRate };
+    }
+
+    function calcTaxes(rev, expenses, settings) {
+      const rates = getTaxRates(settings);
+      const vatReserve = Math.round(rev * rates.vatRate);
+      const preTaxProfit = rev - expenses - vatReserve;
+      const incomeTaxReserve = preTaxProfit > 0 ? Math.round(preTaxProfit * rates.incomeTaxRate) : 0;
+      return {
+        vatRate: rates.vatRate,
+        incomeTaxRate: rates.incomeTaxRate,
+        vatReserve: vatReserve,
+        preTaxProfit: preTaxProfit,
+        incomeTaxReserve: incomeTaxReserve,
+        totalTaxReserve: vatReserve + incomeTaxReserve,
+        netProfit: preTaxProfit - incomeTaxReserve
+      };
     }
 
     function flashBox(id) {
@@ -1362,8 +1396,8 @@
       const baseMkt = src.outflowTotals.marketingCard;
       const baseWelfare = src.outflowTotals.welfareOtherCard;
       const baseFixed = (src.outflowTotals.payroll || 0) + (src.outflowTotals.lease || 0) + (src.outflowTotals.taxInsRent || 0) + (src.outflowTotals.rent || 0);
-      const baseTax = Math.round(baseRev * src.settings.taxReserveRate);
-      const baseProfit = baseRev - baseFixed - baseSupplyTotal - baseMkt - baseWelfare - baseTax;
+      const baseTaxCalc = calcTaxes(baseRev, baseFixed + baseSupplyTotal + baseMkt + baseWelfare, src.settings);
+      const baseProfit = baseTaxCalc.netProfit;
 
       const revPct = parseInt(document.getElementById('sim-slider-rev').value || '0', 10);
       const supplyPct = parseInt(document.getElementById('sim-slider-supply').value || '0', 10);
@@ -1374,11 +1408,11 @@
       const newSupplyTotal = Math.round(baseSupplyTotal * (1 + supplyPct / 100));
       const newMkt = Math.round(baseMkt * (1 + mktPct / 100));
       const newFixed = Math.max(0, baseFixed + fixedMan * 10000);
-      const newTax = Math.round(newRev * src.settings.taxReserveRate);
-      const newProfit = newRev - newFixed - newSupplyTotal - newMkt - baseWelfare - newTax;
+      const newTaxCalc = calcTaxes(newRev, newFixed + newSupplyTotal + newMkt + baseWelfare, src.settings);
+      const newProfit = newTaxCalc.netProfit;
 
-      const newBep = calculateBep(newRev, newFixed + newMkt + baseWelfare, newSupplyTotal, src.settings.taxReserveRate);
-      const baseBep = calculateBep(baseRev, baseFixed + baseMkt + baseWelfare, baseSupplyTotal, src.settings.taxReserveRate);
+      const newBep = calculateBep(newRev, newFixed + newMkt + baseWelfare, newSupplyTotal, newTaxCalc.vatRate);
+      const baseBep = calculateBep(baseRev, baseFixed + baseMkt + baseWelfare, baseSupplyTotal, baseTaxCalc.vatRate);
 
       return {
         revPct: revPct, supplyPct: supplyPct, mktPct: mktPct, fixedMan: fixedMan,
@@ -1472,7 +1506,9 @@
       document.getElementById('inp-card23').value = appState.cards.card23.currentMonthSwipes;
       document.getElementById('inp-supply-cash').value = appState.cards.scheduledSupplyTransfer20;
       document.getElementById('inp-pending-in').value = appState.pendingInflowsTotal;
-      document.getElementById('inp-tax-rate').value = (appState.settings.taxReserveRate * 100).toFixed(1);
+      const rates = getTaxRates(appState.settings);
+      document.getElementById('inp-vat-rate').value = (rates.vatRate * 100).toFixed(1);
+      document.getElementById('inp-income-tax-rate').value = (rates.incomeTaxRate * 100).toFixed(1);
       document.getElementById('inp-internal-kw').value = appState.settings.internalKeywords || '집금,내통장,내부,피부과';
     }
 
@@ -1494,8 +1530,10 @@
       appState.cards.scheduledSupplyTransfer20 = parseInt(document.getElementById('inp-supply-cash').value || '0', 10);
       appState.pendingInflowsTotal = parseInt(document.getElementById('inp-pending-in').value || '0', 10);
 
-      const taxPct = parseFloat(document.getElementById('inp-tax-rate').value || '8.5');
-      appState.settings.taxReserveRate = Math.max(0, Math.min(0.5, taxPct / 100));
+      const vatPct = parseFloat(document.getElementById('inp-vat-rate').value || '5.0');
+      const incPct = parseFloat(document.getElementById('inp-income-tax-rate').value || '33.0');
+      appState.settings.vatRate = Math.max(0, Math.min(0.3, vatPct / 100));
+      appState.settings.incomeTaxRate = Math.max(0, Math.min(0.6, incPct / 100));
       appState.settings.internalKeywords = document.getElementById('inp-internal-kw').value || '집금,내통장,내부,피부과';
 
       appState.balances.updatedAt = '초기값 직접 설정됨';
@@ -1769,13 +1807,14 @@
 
       const fixedCosts = (appState.outflowTotals.payroll || 0) + (appState.outflowTotals.lease || 0) + (appState.outflowTotals.taxInsRent || 0) + (appState.outflowTotals.rent || 0);
       const variableAndCardCosts = totalCardSwipes + cashSupply20;
-      const taxReserve = Math.round(totalInflow * appState.settings.taxReserveRate);
-      const netProfitCur = totalInflow - fixedCosts - variableAndCardCosts - taxReserve;
+      const taxCalc = calcTaxes(totalInflow, fixedCosts + variableAndCardCosts, appState.settings);
+      const taxReserve = taxCalc.totalTaxReserve;
+      const netProfitCur = taxCalc.netProfit;
       const marginCur = ((netProfitCur / Math.max(1, totalInflow)) * 100).toFixed(1) + '%';
 
       const totalSupplyCost = appState.outflowTotals.supplyCard + cashSupply20;
       const nonSupplyFixed = fixedCosts + appState.outflowTotals.marketingCard + appState.outflowTotals.welfareOtherCard;
-      const calculatedBep = calculateBep(totalInflow, nonSupplyFixed, totalSupplyCost, appState.settings.taxReserveRate);
+      const calculatedBep = calculateBep(totalInflow, nonSupplyFixed, totalSupplyCost, taxCalc.vatRate);
 
       const totalBankNow = (appState.balances.woori || 0) + (appState.balances.kyongnam || 0);
       const pendingInTotal = appState.pendingInflowsTotal;
@@ -1802,7 +1841,8 @@
       document.getElementById('sb-profit').textContent = (netProfitCur >= 0 ? '+' : '') + fmtWon(netProfitCur);
 
       document.getElementById('bep-target-lbl').textContent = fmtMan(calculatedBep);
-      document.getElementById('lbl-tax-rate').textContent = (appState.settings.taxReserveRate * 100).toFixed(1);
+      document.getElementById('lbl-vat-rate').textContent = (taxCalc.vatRate * 100).toFixed(1);
+      document.getElementById('lbl-income-tax-rate').textContent = (taxCalc.incomeTaxRate * 100).toFixed(1);
 
       const selectedMonth = document.getElementById('pnl-month-select').value;
       if (selectedMonth === 'cur') {
@@ -1832,7 +1872,8 @@
         document.getElementById('row-pnl-card14').textContent = '-' + fmtWon(card14Swipes);
         document.getElementById('row-pnl-supplycash').textContent = '-' + fmtWon(cashSupply20);
         document.getElementById('row-pnl-card23').textContent = '-' + fmtWon(card23Swipes);
-        document.getElementById('row-pnl-taxres').textContent = '-' + fmtWon(taxReserve);
+        document.getElementById('row-pnl-vat').textContent = '-' + fmtWon(taxCalc.vatReserve);
+        document.getElementById('row-pnl-incometax').textContent = '-' + fmtWon(taxCalc.incomeTaxReserve);
         document.getElementById('row-pnl-net').textContent = (netProfitCur >= 0 ? '+' : '') + fmtWon(netProfitCur);
       } else if (selectedMonth === 'prev1') {
         if (appState.settings && appState.settings.realDataMode) {
