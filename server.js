@@ -28,6 +28,8 @@ const INITIAL_DB = {
   settings: {
     officialCutoffDay: 24,
     day24BaseBalance: 81200000,
+    wooriAccount: '1005-104-863854',
+    realDataMode: false,
     pgSplitRatio: { card: 0.80, naver: 0.12, kakao: 0.08, feeRate: 0.028 },
     pgIsActual: false,
     taxReserveRate: 0.085,
@@ -98,6 +100,9 @@ function loadDb() {
     if (!db.cards.card13) {
       db.cards = JSON.parse(JSON.stringify(INITIAL_DB.cards));
       db.settings.officialCutoffDay = 24;
+    }
+    if (!db.settings.wooriAccount) {
+      db.settings.wooriAccount = '1005-104-863854';
     }
     return db;
   } catch (e) {
@@ -216,7 +221,7 @@ const server = http.createServer(async (req, res) => {
       const payload = await readJsonBody(req);
       const db = loadDb();
       const inboxRes = scanInboxFolder();
-      let batchRes = { addedCount: 0, pgActualCount: 0 };
+      let batchRes = { addedCount: 0, pgActualCount: 0, excludedOtherWooriCount: 0 };
       if (payload.content) {
         batchRes = parseBatchRecords(payload.content, db);
       }
@@ -227,6 +232,7 @@ const server = http.createServer(async (req, res) => {
         ok: true,
         addedCount: batchRes.addedCount + inboxRes.addedRecords,
         pgActualCount: batchRes.pgActualCount,
+        excludedOtherWooriCount: batchRes.excludedOtherWooriCount || 0,
         cloudRes,
         state: db
       }));

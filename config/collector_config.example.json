@@ -13,9 +13,10 @@
     "birthDate6": "YYMMDD",
     "woori": {
       "enabled": true,
-      "accountNumber": "",
+      "accountNumber": "1005-104-863854",
+      "onlyThisAccount": true,
       "queryPassword4": "",
-      "role": "갤럭시아머니트리 PG + 무선단말기 카드입금 + 병원 전체 출금"
+      "role": "지정 계좌 전용 (갤럭시아머니트리 PG + 무선단말기 카드입금 + 병원 전체 출금)"
     },
     "hana": {
       "enabled": true,

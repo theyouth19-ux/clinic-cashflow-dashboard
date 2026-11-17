@@ -125,15 +125,43 @@
         </div>
       </div>
 
+      <!-- 🟦 우리은행 1005-104-863854 실데이터 전용 전환 & 타계좌 자동제외 바 -->
+      <div class="p-3 rounded-xl bg-[var(--background)] border border-[var(--primary)] space-y-2 text-xs">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="px-2 py-0.5 rounded bg-[var(--primary)] text-[var(--primary-foreground)] font-bold">🟦 우리은행 지정계좌: 1005-104-863854</span>
+            <span id="real-mode-badge" class="text-[var(--warning)] font-semibold">⚠️ 현재 화면은 테스트용 가상 샘플 금액입니다 (비밀번호 없이 자동조회 불가)</span>
+          </div>
+          <div class="flex flex-wrap gap-1.5">
+            <button type="button" onclick="openWooriFastQuery()" class="px-2.5 py-1 rounded-lg bg-[var(--secondary)] hover:opacity-90 font-semibold">
+              🏦 우리은행 스피드계좌조회 (계좌복사)
+            </button>
+            <button type="button" onclick="sendTestRecord('[우리은행] 1002-999-111111 입금 9,990,000원 타계좌테스트')" class="px-2.5 py-1 rounded-lg bg-[var(--secondary)] hover:opacity-90 font-semibold">
+              🛡️ 타계좌(1002-999-111111) 제외 테스트
+            </button>
+          </div>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <label class="text-[var(--muted-foreground)] shrink-0">현재 <b>1005-104-863854</b> 실제 잔액(원):</label>
+          <input id="quick-woori-bal" type="number" step="1000" placeholder="예: 34500000" class="w-44 bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1 font-mono font-bold" />
+          <button type="button" onclick="applyQuickWooriRealBalance()" class="px-3 py-1 rounded-lg bg-[var(--success)] text-black font-bold">
+            ✅ 우리 1005-104-863854 잔액만 즉시 반영
+          </button>
+          <button type="button" onclick="resetToRealWooriOnly()" class="px-3 py-1 rounded-lg bg-[var(--error)] text-white font-bold">
+            🧹 샘플 데이터 모두 0원 초기화 (우리은행 1005-104-863854만 시작)
+          </button>
+        </div>
+      </div>
+
       <!-- 6개 핵심 수집 항목 원클릭 테스트 버튼 -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2 text-xs">
         <button type="button" onclick="sendTestRecord('갤럭시아정산,PG정산명세,카드:3600000,네이버페이:580000,카카오페이:320000,미정산:14950000')" class="p-2.5 rounded-lg bg-[var(--secondary)] hover:border-[var(--primary)] border border-[var(--border)] text-left transition active:scale-95">
           <div class="font-bold text-[var(--success)]">① 🟦 갤럭시아PG 실분해</div>
           <div class="text-[var(--muted-foreground)] mt-0.5">카드·N페이·카카오 실제값</div>
         </button>
-        <button type="button" onclick="sendTestRecord('[우리은행] 빠른조회 입금 3,200,000원 하나카드 잔액 55,380,000원')" class="p-2.5 rounded-lg bg-[var(--secondary)] hover:border-[var(--primary)] border border-[var(--border)] text-left transition active:scale-95">
-          <div class="font-bold text-[var(--success)]">② 🟦 우리 빠른조회</div>
-          <div class="text-[var(--muted-foreground)] mt-0.5">무선카드 입금·잔액동기화</div>
+        <button type="button" onclick="sendTestRecord('[우리은행] 1005-104-863854 빠른조회 입금 3,200,000원 하나카드 잔액 55,380,000원')" class="p-2.5 rounded-lg bg-[var(--secondary)] hover:border-[var(--primary)] border border-[var(--border)] text-left transition active:scale-95">
+          <div class="font-bold text-[var(--success)]">② 🟦 우리 1005-104-863854</div>
+          <div class="text-[var(--muted-foreground)] mt-0.5">지정계좌 입금·잔액동기화</div>
         </button>
         <button type="button" onclick="sendTestRecord('[삼성카드] 승인 1,450,000원 일시불 대웅제약 보톡스재료비')" class="p-2.5 rounded-lg bg-[var(--secondary)] hover:border-[var(--primary)] border border-[var(--border)] text-left transition active:scale-95">
           <div class="font-bold text-[var(--warning)]">③ 💳 삼성카드 (13일)</div>
@@ -156,7 +184,7 @@
       <!-- LIVE SCOREBOARD STRIP -->
       <div id="live-scoreboard" class="grid grid-cols-2 md:grid-cols-5 gap-2 p-2.5 rounded-xl bg-[var(--background)] border border-[var(--border)] text-xs">
         <div id="sb-box-woori" class="p-2 rounded-lg">
-          <div class="text-[var(--muted-foreground)]">🟦 우리은행 잔액</div>
+          <div class="text-[var(--muted-foreground)]">🟦 우리 (1005-104-863854)</div>
           <div id="sb-woori" class="font-mono font-bold text-sm mt-0.5">52,180,000원</div>
         </div>
         <div id="sb-box-hana" class="p-2 rounded-lg">
@@ -316,7 +344,7 @@
 
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
           <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
-            <label class="block text-[var(--muted-foreground)] mb-1">🟦 우리은행 현재 잔액 (원)</label>
+            <label class="block text-[var(--muted-foreground)] mb-1">🟦 우리은행 (1005-104-863854) 잔액 (원)</label>
             <input id="inp-woori" type="number" step="100000" class="w-full bg-[var(--card)] border border-[var(--border)] rounded px-2 py-1 font-mono font-bold" />
           </div>
           <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
@@ -652,8 +680,8 @@
           <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3.5 space-y-2">
             <div class="flex items-center justify-between">
               <div>
-                <span class="text-xs px-1.5 py-0.5 rounded bg-[var(--secondary)] font-semibold">개인사업자 빠른조회 · 전체출금</span>
-                <h3 class="font-bold text-sm mt-1">🟦 우리은행</h3>
+                <span class="text-xs px-1.5 py-0.5 rounded bg-[var(--secondary)] font-semibold">지정계좌 전용 · PG/카드입금 · 전체출금</span>
+                <h3 class="font-bold text-sm mt-1">🟦 우리은행 (1005-104-863854)</h3>
               </div>
               <div id="snap-woori" class="text-base font-bold font-mono">52,180,000원</div>
             </div>
@@ -828,6 +856,8 @@
       settings: {
         officialCutoffDay: 24,
         day24BaseBalance: 81200000,
+        wooriAccount: '1005-104-863854',
+        realDataMode: false,
         pgSplitRatio: { card: 0.80, naver: 0.12, kakao: 0.08, feeRate: 0.028 },
         pgIsActual: false,
         taxReserveRate: 0.085,
@@ -907,10 +937,58 @@
         const raw = window.localStorage && window.localStorage.getItem('clinic_dashboard_v5');
         if (raw) {
           const parsed = JSON.parse(raw);
-          if (parsed && parsed.cards && parsed.cards.card13) return parsed;
+          if (parsed && parsed.cards && parsed.cards.card13) {
+            if (!parsed.settings) parsed.settings = cloneObj(INITIAL_STATE.settings);
+            if (!parsed.settings.wooriAccount) parsed.settings.wooriAccount = '1005-104-863854';
+            return parsed;
+          }
         }
       } catch (e) {}
       return cloneObj(INITIAL_STATE);
+    }
+
+    function checkWooriAccountFilterClient(rawText) {
+      const targetRaw = (appState.settings && appState.settings.wooriAccount) ? appState.settings.wooriAccount : '1005-104-863854';
+      const targetDigits = String(targetRaw).replace(/\D/g, '') || '1005104863854';
+      const targetLast6 = targetDigits.slice(-6);
+      const targetLast4 = targetDigits.slice(-4);
+
+      const cleaned = String(rawText || '')
+        .replace(/\b20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}\b/g, ' ')
+        .replace(/\b\d{1,2}:\d{2}(?::\d{2})?\b/g, ' ')
+        .replace(/(?:잔액|누적)?[:\s,]*[0-9,]+\s*원/g, ' ')
+        .replace(/(?:잔액|누적)[:\s,]*[0-9,]+/g, ' ');
+
+      const detectedTokens = [];
+      const dashedMatches = cleaned.match(/[0-9*]{3,4}-[0-9*]{2,6}-[0-9*]{4,7}/g) || [];
+      dashedMatches.forEach(function(tok) { detectedTokens.push(tok); });
+
+      const longDigitMatches = cleaned.match(/\b\d{10,14}\b/g) || [];
+      longDigitMatches.forEach(function(tok) { detectedTokens.push(tok); });
+
+      const explicitSuffixRegex = /(?:계좌(?:번호)?|우리(?:은행)?)\s*[\(\[:\s]*([0-9*]{4,14})/g;
+      let m;
+      while ((m = explicitSuffixRegex.exec(cleaned)) !== null) {
+        detectedTokens.push(m[1]);
+      }
+
+      if (detectedTokens.length === 0) {
+        return { allowed: true, targetAccount: targetRaw };
+      }
+
+      const isMatched = detectedTokens.some(function(tok) {
+        const d = tok.replace(/[^0-9]/g, '');
+        if (!d) return false;
+        if (d === targetDigits) return true;
+        if (d.length >= 6 && d.endsWith(targetLast6)) return true;
+        if (d.length === 4 && d === targetLast4) return true;
+        return false;
+      });
+
+      if (isMatched) {
+        return { allowed: true, targetAccount: targetRaw };
+      }
+      return { allowed: false, targetAccount: targetRaw, detectedAccount: detectedTokens[0] };
     }
 
     function safeSaveState() {
@@ -1140,6 +1218,18 @@
           bankLabel = '경남은행';
         }
 
+        if (bank === 'woori') {
+          const acctCheck = checkWooriAccountFilterClient(textWithoutCardNames);
+          if (!acctCheck.allowed) {
+            const toast = document.getElementById('sim-toast');
+            toast.textContent = '⏭️ [타계좌 자동 제외] 지정된 우리은행 계좌(' + acctCheck.targetAccount + ')가 아닌 다른 계좌(' + acctCheck.detectedAccount + ') 내역이므로 반영하지 않았습니다.';
+            toast.classList.remove('hidden');
+            testCount = Math.max(0, testCount - 1);
+            document.getElementById('sim-click-count').textContent = '수집 반영: ' + testCount + '건';
+            return 'EXCLUDED_WOORI';
+          }
+        }
+
         const isWithdrawal = text.indexOf('출금') !== -1 || text.indexOf('지급') !== -1;
 
         const kwList = (appState.settings.internalKeywords || '집금,내통장,내부,피부과')
@@ -1264,7 +1354,7 @@
     function runFullPcAutoCollectDemo() {
       const sampleBatch = [
         '갤럭시아정산,PG정산명세,카드:3600000,네이버페이:580000,카카오페이:320000,미정산:14950000',
-        '[우리은행] 빠른조회 입금 2,150,000원 국민카드 잔액 58,830,000원',
+        '[우리은행] 1005-104-863854 빠른조회 입금 2,150,000원 국민카드 잔액 58,830,000원',
         '[하나은행] 빠른조회 입금 770,000원 이민호 잔액 19,670,000원',
         '[경남은행] 빠른조회 입금 1,350,000원 힐링페이퍼 잔액 14,790,000원',
         '[삼성카드] 승인 1,100,000원 일시불 휴젤 보톡스재료비',
@@ -1286,14 +1376,16 @@
         const content = String(e.target.result || '');
         const lines = content.split(/\r?\n/).map(function(l) { return l.trim(); }).filter(Boolean);
         let count = 0;
+        let excludedWoori = 0;
         lines.forEach(function(line) {
-          if (!/^(거래일시|승인일시|결제일자|일자|번호),/.test(line)) {
-            processRecordText(line);
-            count += 1;
+          if (!/^(거래일시|승인일시|결제일자|일자|번호|구분|은행명),/.test(line)) {
+            const res = processRecordText(line);
+            if (res === 'EXCLUDED_WOORI') excludedWoori += 1;
+            else count += 1;
           }
         });
         const toast = document.getElementById('sim-toast');
-        toast.textContent = '📂 [' + file.name + '] 파일에서 총 ' + count + '건의 내역을 자동으로 읽어와 대시보드에 반영했습니다!';
+        toast.textContent = '📂 [' + file.name + '] 파일에서 총 ' + count + '건 반영 완료!' + (excludedWoori > 0 ? ' (타 우리은행 계좌 ' + excludedWoori + '건 자동 제외됨)' : '');
         toast.classList.remove('hidden');
       };
       reader.readAsText(file, 'utf-8');
@@ -1416,7 +1508,7 @@
       document.getElementById('inp-woori').value = appState.balances.woori;
       document.getElementById('inp-hana').value = appState.balances.hana;
       document.getElementById('inp-kyongnam').value = appState.balances.kyongnam;
-      document.getElementById('inp-day24-base').value = appState.settings.day24BaseBalance || 81200000;
+      document.getElementById('inp-day24-base').value = (appState.settings.day24BaseBalance !== undefined && appState.settings.day24BaseBalance !== null) ? appState.settings.day24BaseBalance : 81200000;
       document.getElementById('inp-payroll').value = appState.outflowTotals.payroll;
       document.getElementById('inp-taxins').value = appState.outflowTotals.taxInsRent;
       document.getElementById('inp-card13').value = appState.cards.card13.currentMonthSwipes;
@@ -1557,6 +1649,93 @@
       renderAll(true);
     }
 
+    function resetToRealWooriOnly() {
+      realBackupState = null;
+      document.getElementById('sim-active-banner').classList.add('hidden');
+      appState = cloneObj(INITIAL_STATE);
+      appState.settings.realDataMode = true;
+      appState.settings.wooriAccount = '1005-104-863854';
+      appState.settings.day24BaseBalance = 0;
+      appState.balances = {
+        woori: 0,
+        hana: 0,
+        kyongnam: 0,
+        updatedAt: '실데이터 모드 (우리 1005-104-863854 전용)'
+      };
+      appState.pendingInflowsTotal = 0;
+      appState.cards = {
+        card13: { currentMonthSwipes: 0, confirmedNextWithdraw: 0 },
+        card14: { currentMonthSwipes: 0, confirmedNextWithdraw: 0 },
+        card23: { currentMonthSwipes: 0, confirmedNextWithdraw: 0 },
+        scheduledSupplyTransfer20: 0
+      };
+      appState.inflowTotals = {
+        pgCard: 0,
+        wirelessCard: 0,
+        cashHana: 0,
+        platformKyongnam: 0,
+        naverPay: 0,
+        kakaoPay: 0
+      };
+      appState.outflowTotals = {
+        payroll: 0,
+        taxInsRent: 0,
+        supplyCard: 0,
+        marketingCard: 0,
+        welfareOtherCard: 0
+      };
+      appState.processedIds = [];
+      appState.transactions = [];
+
+      testCount = 0;
+      document.getElementById('sim-click-count').textContent = '수집 반영: 0건';
+      const quickInp = document.getElementById('quick-woori-bal');
+      if (quickInp) quickInp.value = '';
+      applySimPreset(0, 0, 0, 0);
+      syncInputsFromState();
+      safeSaveState();
+      renderAll(true);
+
+      const toast = document.getElementById('sim-toast');
+      toast.textContent = '🧹 샘플 숫자를 모두 0원으로 비웠습니다! 이제 위 입력칸에 우리은행(1005-104-863854) 실제 잔액을 입력하거나 CSV/TXT 내역 파일을 올려주세요.';
+      toast.classList.remove('hidden');
+    }
+
+    function applyQuickWooriRealBalance() {
+      const inp = document.getElementById('quick-woori-bal');
+      const raw = inp ? String(inp.value || '').trim() : '';
+      const val = parseInt(raw, 10);
+      const toast = document.getElementById('sim-toast');
+
+      if (!raw || isNaN(val) || val < 0) {
+        toast.textContent = '⚠️ 우리은행(1005-104-863854)의 실제 현재 잔액을 숫자(원 단위)로 입력해 주세요.';
+        toast.classList.remove('hidden');
+        return;
+      }
+
+      appState.balances.woori = val;
+      appState.balances.updatedAt = '우리 1005-104-863854 실잔액 반영';
+      syncInputsFromState();
+      safeSaveState();
+      renderAll(true);
+      flashBox('sb-box-woori');
+
+      toast.textContent = '✅ 우리은행(1005-104-863854) 실제 잔액이 ' + fmtWon(val) + '으로 반영되었습니다!' +
+        (!appState.settings.realDataMode ? ' (다른 샘플 금액도 지우려면 [🧹 샘플 데이터 모두 0원 초기화]를 눌러주세요.)' : '');
+      toast.classList.remove('hidden');
+    }
+
+    function openWooriFastQuery() {
+      const acctNo = '1005104863854';
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(acctNo).catch(function() {});
+      }
+      window.open('https://www.wooribank.com', '_blank', 'noopener');
+      const toast = document.getElementById('sim-toast');
+      toast.textContent = '🏦 우리은행 계좌번호(1005104863854)가 복사되었습니다! 열린 우리은행 홈페이지에서 [스피드계좌조회] 또는 [개인/기업 ➔ 조회 ➔ 스피드조회계좌]를 통해 내역을 확인하세요.';
+      toast.classList.remove('hidden');
+    }
+
     function updateDynamicDateLabels() {
       const now = new Date();
       const m = now.getMonth() + 1;
@@ -1601,7 +1780,18 @@
       const confirmedCard23 = (appState.cards.card23 && appState.cards.card23.confirmedNextWithdraw) || 0;
       const pendingOutTotal = confirmedCard23 + cashSupply20 + totalCardSwipes;
       const realCashNow = totalBankNow + pendingInTotal - pendingOutTotal;
-      const day24Base = appState.settings.day24BaseBalance || 81200000;
+      const day24Base = (appState.settings.day24BaseBalance !== undefined && appState.settings.day24BaseBalance !== null) ? appState.settings.day24BaseBalance : 81200000;
+
+      const realBadge = document.getElementById('real-mode-badge');
+      if (realBadge) {
+        if (appState.settings && appState.settings.realDataMode) {
+          realBadge.className = 'text-[var(--success)] font-semibold';
+          realBadge.textContent = '✅ 실데이터 전용 모드 (우리 1005-104-863854 외 타계좌 자동제외)';
+        } else {
+          realBadge.className = 'text-[var(--warning)] font-semibold';
+          realBadge.textContent = '⚠️ 현재 화면은 테스트용 가상 샘플 금액입니다 (오른쪽 버튼으로 0원 초기화 가능)';
+        }
+      }
 
       document.getElementById('sb-woori').textContent = fmtWon(appState.balances.woori);
       document.getElementById('sb-hana').textContent = fmtWon(appState.balances.hana);
@@ -1641,25 +1831,49 @@
         document.getElementById('row-pnl-taxres').textContent = '-' + fmtWon(taxReserve);
         document.getElementById('row-pnl-net').textContent = (netProfitCur >= 0 ? '+' : '') + fmtWon(netProfitCur);
       } else if (selectedMonth === 'prev1') {
-        document.getElementById('pnl-title-badge').textContent = '전월 귀속 (23일 경남카드 최종 출금 후 24일 확정)';
-        document.getElementById('pnl-verdict-tag').textContent = '흑자';
-        document.getElementById('pnl-net-profit').textContent = '+46,180,000원';
-        document.getElementById('pnl-margin').textContent = '25.0%';
-        document.getElementById('pnl-day24-sub').textContent = '전전월24일(4,840만) ➔ 전월24일(8,120만)';
-        document.getElementById('pnl-day24-diff').textContent = '+32,800,000원';
-        document.getElementById('pnl-rev').textContent = '+1억 8,460만';
-        document.getElementById('pnl-cost').textContent = '-7,002만';
-        document.getElementById('pnl-mkt').textContent = '-5,260만';
-        document.getElementById('pnl-tax').textContent = '-1,580만';
-        document.getElementById('bep-pct').textContent = '돌파 완료';
-        document.getElementById('bep-bar').style.width = '100%';
+        if (appState.settings && appState.settings.realDataMode) {
+          document.getElementById('pnl-title-badge').textContent = '전월 귀속 (아직 마감 스냅샷 데이터 없음)';
+          document.getElementById('pnl-verdict-tag').textContent = '대기';
+          document.getElementById('pnl-net-profit').textContent = '0원';
+          document.getElementById('pnl-margin').textContent = '0.0%';
+          document.getElementById('pnl-day24-sub').textContent = '전전월24일(0만) ➔ 전월24일(0만)';
+          document.getElementById('pnl-day24-diff').textContent = '0원';
+          document.getElementById('pnl-rev').textContent = '0만';
+          document.getElementById('pnl-cost').textContent = '0만';
+          document.getElementById('pnl-mkt').textContent = '0만';
+          document.getElementById('pnl-tax').textContent = '0만';
+          document.getElementById('bep-pct').textContent = '0% 달성';
+          document.getElementById('bep-bar').style.width = '0%';
+        } else {
+          document.getElementById('pnl-title-badge').textContent = '전월 귀속 (23일 경남카드 최종 출금 후 24일 확정)';
+          document.getElementById('pnl-verdict-tag').textContent = '흑자';
+          document.getElementById('pnl-net-profit').textContent = '+46,180,000원';
+          document.getElementById('pnl-margin').textContent = '25.0%';
+          document.getElementById('pnl-day24-sub').textContent = '전전월24일(4,840만) ➔ 전월24일(8,120만)';
+          document.getElementById('pnl-day24-diff').textContent = '+32,800,000원';
+          document.getElementById('pnl-rev').textContent = '+1억 8,460만';
+          document.getElementById('pnl-cost').textContent = '-7,002만';
+          document.getElementById('pnl-mkt').textContent = '-5,260만';
+          document.getElementById('pnl-tax').textContent = '-1,580만';
+          document.getElementById('bep-pct').textContent = '돌파 완료';
+          document.getElementById('bep-bar').style.width = '100%';
+        }
       } else {
-        document.getElementById('pnl-title-badge').textContent = '전전월 귀속 (23일 경남카드 최종 출금 후 24일 확정)';
-        document.getElementById('pnl-verdict-tag').textContent = '흑자';
-        document.getElementById('pnl-net-profit').textContent = '+33,900,000원';
-        document.getElementById('pnl-margin').textContent = '20.9%';
-        document.getElementById('pnl-day24-sub').textContent = '3개월전24일(1,920만) ➔ 전전월24일(4,840만)';
-        document.getElementById('pnl-day24-diff').textContent = '+29,200,000원';
+        if (appState.settings && appState.settings.realDataMode) {
+          document.getElementById('pnl-title-badge').textContent = '전전월 귀속 (아직 마감 스냅샷 데이터 없음)';
+          document.getElementById('pnl-verdict-tag').textContent = '대기';
+          document.getElementById('pnl-net-profit').textContent = '0원';
+          document.getElementById('pnl-margin').textContent = '0.0%';
+          document.getElementById('pnl-day24-sub').textContent = '3개월전24일(0만) ➔ 전전월24일(0만)';
+          document.getElementById('pnl-day24-diff').textContent = '0원';
+        } else {
+          document.getElementById('pnl-title-badge').textContent = '전전월 귀속 (23일 경남카드 최종 출금 후 24일 확정)';
+          document.getElementById('pnl-verdict-tag').textContent = '흑자';
+          document.getElementById('pnl-net-profit').textContent = '+33,900,000원';
+          document.getElementById('pnl-margin').textContent = '20.9%';
+          document.getElementById('pnl-day24-sub').textContent = '3개월전24일(1,920만) ➔ 전전월24일(4,840만)';
+          document.getElementById('pnl-day24-diff').textContent = '+29,200,000원';
+        }
       }
 
       const snapMode = document.getElementById('snapshot-select').value;
@@ -1674,21 +1888,41 @@
         document.getElementById('snap-kyongnam').textContent = fmtWon(appState.balances.kyongnam);
         document.getElementById('snap-woori-upcoming').textContent = '-' + fmtWon(confirmedCard23 + cashSupply20);
       } else if (snapMode === 'day24_prev1') {
-        document.getElementById('snap-total-bank').textContent = '8,120만 원';
-        document.getElementById('snap-pending-in').textContent = '+1,540만 원';
-        document.getElementById('snap-pending-card').textContent = '-620만 원';
-        document.getElementById('snap-real-cash').textContent = '9,040만 원';
-        document.getElementById('snap-woori').textContent = '50,900,000원';
-        document.getElementById('snap-hana').textContent = '17,200,000원';
-        document.getElementById('snap-kyongnam').textContent = '13,100,000원';
+        if (appState.settings && appState.settings.realDataMode) {
+          document.getElementById('snap-total-bank').textContent = '0만 원';
+          document.getElementById('snap-pending-in').textContent = '0만 원';
+          document.getElementById('snap-pending-card').textContent = '0만 원';
+          document.getElementById('snap-real-cash').textContent = '0만 원';
+          document.getElementById('snap-woori').textContent = '0원';
+          document.getElementById('snap-hana').textContent = '0원';
+          document.getElementById('snap-kyongnam').textContent = '0원';
+        } else {
+          document.getElementById('snap-total-bank').textContent = '8,120만 원';
+          document.getElementById('snap-pending-in').textContent = '+1,540만 원';
+          document.getElementById('snap-pending-card').textContent = '-620만 원';
+          document.getElementById('snap-real-cash').textContent = '9,040만 원';
+          document.getElementById('snap-woori').textContent = '50,900,000원';
+          document.getElementById('snap-hana').textContent = '17,200,000원';
+          document.getElementById('snap-kyongnam').textContent = '13,100,000원';
+        }
       } else {
-        document.getElementById('snap-total-bank').textContent = '4,840만 원';
-        document.getElementById('snap-pending-in').textContent = '+1,410만 원';
-        document.getElementById('snap-pending-card').textContent = '-490만 원';
-        document.getElementById('snap-real-cash').textContent = '5,760만 원';
-        document.getElementById('snap-woori').textContent = '28,800,000원';
-        document.getElementById('snap-hana').textContent = '11,300,000원';
-        document.getElementById('snap-kyongnam').textContent = '8,300,000원';
+        if (appState.settings && appState.settings.realDataMode) {
+          document.getElementById('snap-total-bank').textContent = '0만 원';
+          document.getElementById('snap-pending-in').textContent = '0만 원';
+          document.getElementById('snap-pending-card').textContent = '0만 원';
+          document.getElementById('snap-real-cash').textContent = '0만 원';
+          document.getElementById('snap-woori').textContent = '0원';
+          document.getElementById('snap-hana').textContent = '0원';
+          document.getElementById('snap-kyongnam').textContent = '0원';
+        } else {
+          document.getElementById('snap-total-bank').textContent = '4,840만 원';
+          document.getElementById('snap-pending-in').textContent = '+1,410만 원';
+          document.getElementById('snap-pending-card').textContent = '-490만 원';
+          document.getElementById('snap-real-cash').textContent = '5,760만 원';
+          document.getElementById('snap-woori').textContent = '28,800,000원';
+          document.getElementById('snap-hana').textContent = '11,300,000원';
+          document.getElementById('snap-kyongnam').textContent = '8,300,000원';
+        }
       }
 
       document.getElementById('card13-cur-swipes').textContent = fmtWon(card13Swipes);
@@ -1710,10 +1944,14 @@
         '</div>';
       }).join('');
 
-      const periodOut = fixedCosts + 14800000;
+      const bankOutSum = appState.transactions
+        .filter(function(t) { return t.type === 'BANK_OUT'; })
+        .reduce(function(s, t) { return s + Math.abs(t.amount); }, 0);
+      const periodOut = fixedCosts + ((appState.settings && appState.settings.realDataMode) ? bankOutSum : 14800000);
+      const periodNet = totalInflow - periodOut;
       document.getElementById('period-in').textContent = '+' + fmtWon(totalInflow);
       document.getElementById('period-out').textContent = '-' + fmtWon(periodOut);
-      document.getElementById('period-net').textContent = '+' + fmtWon(totalInflow - periodOut);
+      document.getElementById('period-net').textContent = (periodNet >= 0 ? '+' : '') + fmtWon(periodNet);
 
       document.getElementById('tx-log-list').innerHTML = appState.transactions.slice(0, 8).map(function(t) {
         const color = t.type === 'BANK_IN' ? 'text-[var(--success)]' : (t.type === 'CARD_SWIPE' ? 'text-[var(--warning)]' : 'opacity-75');
