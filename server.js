@@ -27,8 +27,9 @@ const CONFIG_EXAMPLE_FILE = path.join(CONFIG_DIR, 'collector_config.example.json
 const INITIAL_DB = {
   settings: {
     officialCutoffDay: 24,
-    day24BaseBalance: 81200000,
+    day24BaseBalance: 65620000,
     wooriAccount: '1005-104-863854',
+    kyongnamAccount: '207-0172-8715-04',
     realDataMode: false,
     pgSplitRatio: { card: 0.80, naver: 0.12, kakao: 0.08, feeRate: 0.028 },
     pgIsActual: false,
@@ -103,6 +104,9 @@ function loadDb() {
     }
     if (!db.settings.wooriAccount) {
       db.settings.wooriAccount = '1005-104-863854';
+    }
+    if (!db.settings.kyongnamAccount) {
+      db.settings.kyongnamAccount = '207-0172-8715-04';
     }
     return db;
   } catch (e) {

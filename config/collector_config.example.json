@@ -26,9 +26,10 @@
     },
     "kyongnam": {
       "enabled": true,
-      "accountNumber": "",
+      "accountNumber": "207-0172-8715-04",
+      "onlyThisAccount": true,
       "queryPassword4": "",
-      "role": "갤럭시아PG 일부 단말기 + 강남언니(힐링페이퍼) · 언니가이드 정산"
+      "role": "지정 계좌 전용 (갤럭시아PG 일부 단말기 + 강남언니(힐링페이퍼) · 언니가이드 정산)"
     }
   },
   "popbill": {

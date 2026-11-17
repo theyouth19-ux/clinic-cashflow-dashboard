@@ -17,19 +17,17 @@ const path = require('path');
 const https = require('https');
 
 const DEFAULT_WOORI_ACCOUNT = '1005-104-863854';
+const DEFAULT_KYONGNAM_ACCOUNT = '207-0172-8715-04';
 
 /**
- * 우리은행 지정 계좌(기본 1005-104-863854) 필터
- * 내역 텍스트에 우리은행 계좌번호(예: 1002-..., 1005-..., 1006-... 또는 계좌 뒤 4~6자리)가
- * 포함되어 있는데 지정 계좌가 아니면 OTHER_WOORI_ACCOUNT로 자동 제외한다.
+ * 지정 계좌 필터 (우리은행 1005-104-863854 / 경남은행 207-0172-8715-04)
+ * 내역 텍스트에 계좌번호가 포함되어 있는데 지정 계좌가 아니면 자동 제외한다.
  */
-function checkWooriAccountFilter(rawText, db) {
-  const targetRaw = (db && db.settings && db.settings.wooriAccount) ? db.settings.wooriAccount : DEFAULT_WOORI_ACCOUNT;
-  const targetDigits = String(targetRaw).replace(/\D/g, '') || '1005104863854';
+function checkTargetAccountFilter(rawText, targetRaw, bankLabelRegex) {
+  const targetDigits = String(targetRaw).replace(/\D/g, '');
   const targetLast6 = targetDigits.slice(-6);
   const targetLast4 = targetDigits.slice(-4);
 
-  // 날짜, 시각, 금액(원/잔액/누적)을 제거해 숫자 오인식을 방지
   const cleaned = String(rawText || '')
     .replace(/\b20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}\b/g, ' ')
     .replace(/\b\d{1,2}:\d{2}(?::\d{2})?\b/g, ' ')
@@ -38,16 +36,16 @@ function checkWooriAccountFilter(rawText, db) {
 
   const detectedTokens = [];
 
-  // 1) 하이픈 포함 계좌번호 (예: 1005-104-863854, 1002-999-111111, 1005-***-863854)
-  const dashedMatches = cleaned.match(/[0-9*]{3,4}-[0-9*]{2,6}-[0-9*]{4,7}/g) || [];
+  // 1) 하이픈 포함 계좌번호 (예: 1005-104-863854, 207-0172-8715-04, 1005-***-863854)
+  const dashedMatches = cleaned.match(/[0-9*]{3,4}-[0-9*]{2,6}-[0-9*]{4,7}(?:-[0-9*]{2,4})?/g) || [];
   dashedMatches.forEach(tok => detectedTokens.push(tok));
 
-  // 2) 하이픈 없는 10~14자리 계좌번호 (예: 1005104863854, 1002999111111)
+  // 2) 하이픈 없는 10~14자리 계좌번호
   const longDigitMatches = cleaned.match(/\b\d{10,14}\b/g) || [];
   longDigitMatches.forEach(tok => detectedTokens.push(tok));
 
-  // 3) 명시적 계좌 뒤 4~6자리 (예: 우리(3854), 계좌 1111, 우리은행 9999)
-  const explicitSuffixRegex = /(?:계좌(?:번호)?|우리(?:은행)?)\s*[\(\[:\s]*([0-9*]{4,14})/g;
+  // 3) 명시적 계좌 뒤 4~6자리
+  const explicitSuffixRegex = new RegExp(`(?:계좌(?:번호)?|${bankLabelRegex})\\s*[\\(\\[\\:\\s]*([0-9*]{4,14})`, 'g');
   let m;
   while ((m = explicitSuffixRegex.exec(cleaned)) !== null) {
     detectedTokens.push(m[1]);
@@ -76,6 +74,16 @@ function checkWooriAccountFilter(rawText, db) {
     targetAccount: targetRaw,
     detectedAccount: detectedTokens[0]
   };
+}
+
+function checkWooriAccountFilter(rawText, db) {
+  const targetRaw = (db && db.settings && db.settings.wooriAccount) ? db.settings.wooriAccount : DEFAULT_WOORI_ACCOUNT;
+  return checkTargetAccountFilter(rawText, targetRaw, '우리(?:은행)?');
+}
+
+function checkKyongnamAccountFilter(rawText, db) {
+  const targetRaw = (db && db.settings && db.settings.kyongnamAccount) ? db.settings.kyongnamAccount : DEFAULT_KYONGNAM_ACCOUNT;
+  return checkTargetAccountFilter(rawText, targetRaw, '경남(?:은행)?');
 }
 
 function maskCustomerName(text) {
@@ -237,7 +245,7 @@ function parseSingleTextLine(rawText, db) {
     bankLabel = '경남은행';
   }
 
-  // 우리은행은 지정 계좌(1005-104-863854)만 반영, 타 계좌 자동 제외
+  // 우리은행(1005-104-863854) 및 경남은행(207-0172-8715-04) 지정 계좌만 반영
   if (bank === 'woori') {
     const acctCheck = checkWooriAccountFilter(textWithoutCardNames, db);
     if (!acctCheck.allowed) {
@@ -245,6 +253,17 @@ function parseSingleTextLine(rawText, db) {
         ok: false,
         skipped: true,
         reason: 'OTHER_WOORI_ACCOUNT',
+        targetAccount: acctCheck.targetAccount,
+        detectedAccount: acctCheck.detectedAccount
+      };
+    }
+  } else if (bank === 'kyongnam') {
+    const acctCheck = checkKyongnamAccountFilter(textWithoutCardNames, db);
+    if (!acctCheck.allowed) {
+      return {
+        ok: false,
+        skipped: true,
+        reason: 'OTHER_KYONGNAM_ACCOUNT',
         targetAccount: acctCheck.targetAccount,
         detectedAccount: acctCheck.detectedAccount
       };
@@ -411,7 +430,10 @@ function pushStateToGoogleSheet(db) {
 
 module.exports = {
   DEFAULT_WOORI_ACCOUNT,
+  DEFAULT_KYONGNAM_ACCOUNT,
+  checkTargetAccountFilter,
   checkWooriAccountFilter,
+  checkKyongnamAccountFilter,
   maskCustomerName,
   detectCardGroup,
   parseBatchRecords,
