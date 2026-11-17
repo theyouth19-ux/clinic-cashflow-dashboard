@@ -228,14 +228,11 @@ function parseSingleTextLine(rawText, db) {
     return { ok: true, tx };
   }
 
-  // 은행 입출금 처리 (카드사명 제거 후 은행 판별)
+  // 은행 입출금 처리 (카드사명 제거 후 은행 판별: 우리은행 + 경남은행 2개 통장 전용)
   const textWithoutCardNames = text.replace(/(신한|삼성|현대|국민|비씨|롯데|하나|우리)카드/g, '');
   let bank = 'woori';
   let bankLabel = '우리은행';
-  if (/\[하나|하나은행/.test(textWithoutCardNames)) {
-    bank = 'hana';
-    bankLabel = '하나은행';
-  } else if (/\[경남|경남은행/.test(textWithoutCardNames)) {
+  if (/\[경남|경남은행/.test(textWithoutCardNames)) {
     bank = 'kyongnam';
     bankLabel = '경남은행';
   }
@@ -288,7 +285,7 @@ function parseSingleTextLine(rawText, db) {
       db.balances[bank] += rawAmount;
     }
 
-    const badge = bank === 'woori' ? '🟦 우리입금' : (bank === 'hana' ? '🟩 하나입금' : '🟧 경남입금');
+    const badge = bank === 'woori' ? '🟦 우리입금' : '🟧 경남입금';
     let title = '계좌 입금';
     let sub = parsedBalance !== null ? `잔액(${Math.round(parsedBalance / 10000)}만) 자동동기화` : '입금 반영';
 
@@ -301,8 +298,8 @@ function parseSingleTextLine(rawText, db) {
       db.inflowTotals.naverPay += n;
       db.inflowTotals.kakaoPay += k;
       db.pendingInflowsTotal = Math.max(0, db.pendingInflowsTotal - rawAmount);
-      title = '갤럭시아머니트리';
-      sub = `카드 ${Math.round(c / 10000)}만·N페이 ${Math.round(n / 10000)}만·카카오 ${Math.round(k / 10000)}만`;
+      title = `갤럭시아머니트리 (${bankLabel})`;
+      sub = `카드(D+1) ${Math.round(c / 10000)}만·기타페이(D+3) ${Math.round((n + k) / 10000)}만`;
     } else if (/신한카드|삼성카드|현대카드|국민카드|비씨카드|롯데카드|하나카드|우리카드/.test(text)) {
       const m = text.match(/(신한카드|삼성카드|현대카드|국민카드|비씨카드|롯데카드|하나카드|우리카드)/);
       const cardCo = m ? m[1] : '카드사';
@@ -320,8 +317,8 @@ function parseSingleTextLine(rawText, db) {
       const masked = maskCustomerName(
         text.replace(/\[.*?\]/g, '').replace(/[0-9,/:\s]+/g, ' ').replace(/빠른조회|입금|원|잔액/g, '').trim()
       );
-      title = (masked || '고객') + '님 현금이체';
-      sub = '하나은행 현금수입 (실명 자동마스킹)';
+      title = (masked || '원장님') + ' 현금입금';
+      sub = bankLabel + ' 고객 현금수입 (직접입금 반영)';
     }
 
     const tx = {

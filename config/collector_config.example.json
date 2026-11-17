@@ -19,17 +19,25 @@
       "role": "지정 계좌 전용 (갤럭시아머니트리 PG + 무선단말기 카드입금 + 병원 전체 출금)"
     },
     "hana": {
-      "enabled": true,
+      "enabled": false,
       "accountNumber": "",
       "queryPassword4": "",
-      "role": "고객 현금이체 수납 전용 (실명 자동 마스킹)"
+      "role": "연동 제외 (고객 현금입금은 우리은행 1005-104-863854 직접입금으로 반영)"
     },
     "kyongnam": {
       "enabled": true,
       "accountNumber": "",
       "queryPassword4": "",
-      "role": "강남언니(힐링페이퍼) · 언니가이드 정산 전용"
+      "role": "갤럭시아PG 일부 단말기 + 강남언니(힐링페이퍼) · 언니가이드 정산"
     }
+  },
+  "popbill": {
+    "enabled": true,
+    "isTest": true,
+    "corpNum": "",
+    "linkId": "",
+    "secretKey": "",
+    "note": "우리은행(1005-104-863854) + 경남은행 2계좌 전용 팝빌 계좌조회 API (1개월 무상 테스트, 이후 계좌당 월 5,000원)"
   },
   "galaxiaPg": {
     "enabled": true,

@@ -39,7 +39,7 @@ const INITIAL_DB = {
   },
   balances: {
     woori: 52180000,
-    hana: 18900000,
+    hana: 0,
     kyongnam: 13440000,
     updatedAt: 'PC 자동수집 대기중'
   },
