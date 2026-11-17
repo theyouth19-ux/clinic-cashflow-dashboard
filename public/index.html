@@ -1553,6 +1553,148 @@
       return { addedCount: addedCount, dupCount: dupCount, latestBal: latestBal, bank: bank };
     }
 
+    function parseWonNumber(str) {
+      const cleaned = String(str || '').replace(/,/g, '').replace(/[^0-9.\-]/g, '');
+      if (!cleaned) return 0;
+      const num = parseFloat(cleaned);
+      return isNaN(num) ? 0 : Math.round(num);
+    }
+
+    function parseCsvLine(line) {
+      const cols = [];
+      let cur = '';
+      let inQuote = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') {
+          inQuote = !inQuote;
+        } else if (ch === ',' && !inQuote) {
+          cols.push(cur.trim());
+          cur = '';
+        } else {
+          cur += ch;
+        }
+      }
+      cols.push(cur.trim());
+      return cols;
+    }
+
+    function importKyongnamCsv(csvText) {
+      const lines = String(csvText || '').split(/\r?\n/).map(function(l) { return l.trim(); }).filter(Boolean);
+      const headerIdx = lines.findIndex(function(l) {
+        return l.includes('거래일시') && l.includes('출금금액') && l.includes('입금금액');
+      });
+      if (headerIdx === -1) return null;
+
+      if (!appState.settings.realDataMode) {
+        resetToRealWooriOnly();
+      }
+      if (!Array.isArray(appState.processedIds)) appState.processedIds = [];
+
+      let addedCount = 0;
+      let dupCount = 0;
+      let latestDt = '';
+      let latestBal = null;
+      const kwList = String(appState.settings.internalKeywords || '집금,내통장,내부,피부과').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+
+      for (let i = headerIdx + 1; i < lines.length; i++) {
+        const cols = parseCsvLine(lines[i]);
+        if (cols.length < 8) continue;
+        if (cols[0] === '합계') continue;
+        const dt = cols[1] || '';
+        if (!/^\d{4}[.\-/]\d{2}[.\-/]\d{2}/.test(dt)) continue;
+
+        const kind = cols[2] || '';
+        const ioType = cols[3] || '';
+        const outAmt = parseWonNumber(cols[4]);
+        const inAmt = parseWonNumber(cols[5]);
+        const balRaw = String(cols[6] || '').trim();
+        const bal = balRaw ? parseWonNumber(balRaw) : null;
+        const desc = cols[7] || '';
+        const memo = cols[9] || '';
+
+        if (outAmt === 0 && inAmt === 0 && bal === null) continue;
+
+        const dtNorm = dt.replace(/\./g, '-');
+        if (bal !== null && dtNorm >= latestDt) {
+          latestDt = dtNorm;
+          latestBal = bal;
+        }
+
+        const fp = 'kyongnam|207-0172-8715-04|' + dtNorm + '|' + outAmt + '|' + inAmt + '|' + (bal !== null ? bal : '') + '|' + kind + '|' + desc;
+        if (appState.processedIds.indexOf(fp) !== -1) {
+          dupCount += 1;
+          continue;
+        }
+        appState.processedIds.push(fp);
+        if (outAmt === 0 && inAmt === 0) continue;
+
+        const shortDt = dtNorm.slice(5, 16).replace(/-/g, '/');
+        const combined = desc + ' ' + memo + ' ' + kind;
+        let badge = '🟧 경남';
+        let txType = inAmt > 0 ? 'BANK_IN' : 'BANK_OUT';
+        let sub = kind || ioType;
+
+        if (inAmt > 0) {
+          if (/갤럭시아/i.test(combined)) {
+            appState.inflowTotals.pgCard += inAmt;
+            badge = '🟦 갤럭시아PG';
+            sub = '경남 계좌 PG 정산입금';
+          } else if (/힐링페이퍼|강남언니|여신티켓|바비톡|언니가이드/i.test(combined)) {
+            appState.inflowTotals.platformKyongnam += inAmt;
+            badge = /힐링/.test(combined) ? '🟧 강남언니' : '🟧 여신티켓';
+            sub = '플랫폼 정산입금';
+          } else if (/^(KB|하나|NH|현대|BC|신한|우|삼성|롯데)/i.test(desc)) {
+            appState.inflowTotals.wirelessCard += inAmt;
+            badge = '💳 단말기정산';
+            sub = '카드사 단말기 정산';
+          } else {
+            appState.inflowTotals.platformKyongnam += inAmt;
+            badge = '🟧 경남입금';
+          }
+        } else if (outAmt > 0) {
+          const isInternal = (/김대윤/.test(desc) && !/국고|서울특징/.test(desc)) || kwList.some(function(kw) { return combined.includes(kw); });
+          const dayNum = parseInt(dtNorm.slice(8, 10), 10) || 0;
+          if (isInternal) {
+            badge = '🔄 내부/본인이체';
+            sub = '경비 제외 (본인·내부이체)';
+          } else if (dayNum >= 4 && dayNum <= 6 && outAmt >= 500000) {
+            appState.outflowTotals.payroll = (appState.outflowTotals.payroll || 0) + outAmt;
+            badge = '👥 급여/인건비';
+            sub = '5일 전후 이체';
+          } else {
+            appState.outflowTotals.welfareOtherCard += outAmt;
+            badge = '🟧 경남출금';
+          }
+        }
+
+        appState.transactions.unshift({
+          id: fp,
+          datetime: shortDt,
+          type: txType,
+          badge: badge,
+          title: maskCustomerName(desc || kind || '경남거래'),
+          sub: sub,
+          amount: inAmt > 0 ? inAmt : outAmt
+        });
+        addedCount += 1;
+      }
+
+      if (latestBal !== null) {
+        appState.balances.kyongnam = latestBal;
+        appState.balances.updatedAt = '경남 ' + latestDt.slice(5, 16) + ' 엑셀반영';
+      }
+      if (appState.transactions.length > 150) {
+        appState.transactions = appState.transactions.slice(0, 150);
+      }
+
+      syncInputsFromState();
+      safeSaveState();
+      renderAll(true);
+      flashBox('sb-box-kyongnam');
+      return { addedCount: addedCount, dupCount: dupCount, latestBal: latestBal, bank: 'kyongnam' };
+    }
+
     function handleFileUpload(event) {
       const file = event.target.files && event.target.files[0];
       if (!file) return;
@@ -1571,6 +1713,18 @@
           }
           if (res) {
             toast.textContent = '✅ [' + file.name + '] 신규 ' + res.addedCount + '건 반영 완료!' +
+              (res.dupCount > 0 ? ' (중복 기간 ' + res.dupCount + '건 자동 제외됨)' : '') +
+              (res.latestBal !== null ? ' · 최신 잔액 ' + fmtWon(res.latestBal) : '');
+            toast.classList.remove('hidden');
+            event.target.value = '';
+            return;
+          }
+        }
+
+        if (text.includes('거래일시') && text.includes('출금금액') && text.includes('입금금액')) {
+          const res = importKyongnamCsv(text);
+          if (res) {
+            toast.textContent = '✅ [' + file.name + ' · 경남은행] 신규 ' + res.addedCount + '건 반영 완료!' +
               (res.dupCount > 0 ? ' (중복 기간 ' + res.dupCount + '건 자동 제외됨)' : '') +
               (res.latestBal !== null ? ' · 최신 잔액 ' + fmtWon(res.latestBal) : '');
             toast.classList.remove('hidden');
