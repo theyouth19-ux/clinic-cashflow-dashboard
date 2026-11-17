@@ -150,8 +150,8 @@
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <label class="px-4 py-2 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] font-bold cursor-pointer hover:opacity-90">
-            📂 우리·경남 엑셀(.xls / .csv) 파일 선택하여 바로 반영
-            <input id="excel-file-input" type="file" accept=".xls,.xlsx,.csv,.txt,.tsv,.html,.htm" onchange="handleFileUpload(event)" class="hidden" />
+            📂 우리·경남 엑셀(.xls / .csv) 여러 파일 한꺼번에 올리기
+            <input id="excel-file-input" type="file" multiple accept=".xls,.xlsx,.csv,.txt,.tsv,.html,.htm" onchange="handleFileUpload(event)" class="hidden" />
           </label>
           <span class="text-[11px] text-[var(--muted-foreground)]">
             * 우리은행(1005-104-863854) 엑셀 그대로 올리시면 <b>급여·리스·세금·카드·갤럭시아·잔액</b>이 자동 분류되고, 이미 들어간 날짜/건은 자동 건너뜁니다.
@@ -768,8 +768,34 @@
 
         <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3.5 space-y-2">
           <div class="flex items-center justify-between">
-            <h3 class="font-bold text-xs">🤖 PC 자동수집 & 실시간 분류 로그 (최신순)</h3>
-            <span class="text-xs text-[var(--muted-foreground)]">XSS방어 · 환자실명 마스킹</span>
+            <h3 class="font-bold text-xs">📊 월별 손익 추이 비교 (5~11월 업로드 월 자동 집계)</h3>
+            <span class="text-xs text-[var(--muted-foreground)]">단위: 만원</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs text-right">
+              <thead>
+                <tr class="border-b border-[var(--border)] text-[var(--muted-foreground)]">
+                  <th class="py-1.5 text-left">월</th>
+                  <th class="py-1.5">총유입</th>
+                  <th class="py-1.5">고정비</th>
+                  <th class="py-1.5">카드·기타</th>
+                  <th class="py-1.5">부가·종소세</th>
+                  <th class="py-1.5">세후순이익</th>
+                  <th class="py-1.5">월말잔액</th>
+                </tr>
+              </thead>
+              <tbody id="monthly-comparison-body" class="divide-y divide-[var(--card-border)] font-mono"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3.5 space-y-2">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <h3 class="font-bold text-xs">🤖 선택 월 거래내역 & 자동분류 로그</h3>
+            <div class="flex items-center gap-1.5 text-xs">
+              <button type="button" id="btn-tx-all" onclick="setTxFilter('all')" class="px-2.5 py-1 rounded-lg tab-active">전체</button>
+              <button type="button" id="btn-tx-uncertain" onclick="setTxFilter('uncertain')" class="px-2.5 py-1 rounded-lg bg-[var(--secondary)]">🤔 헷갈리는(기타) 항목만 (<span id="uncertain-count-badge">0</span>)</button>
+            </div>
           </div>
           <div id="tx-log-list" class="divide-y divide-[var(--card-border)] text-xs"></div>
         </div>
@@ -846,6 +872,7 @@
         welfareOtherCard: 2900000
       },
       processedIds: [],
+      monthlyData: {},
       transactions: [
         { id: '1', datetime: '11/16 11:15', type: 'BANK_IN', badge: '🟦 우리입금', title: '갤럭시아머니트리', sub: '카드 536만·N페이 80만·카카오 54만', amount: 6700000 },
         { id: '2', datetime: '11/16 10:42', type: 'BANK_IN', badge: '🟩 하나입금', title: '박*현 고객님', sub: '시술비 계좌이체 (실명자동마스킹)', amount: 550000 },
@@ -1358,6 +1385,98 @@
       toast.classList.remove('hidden');
     }
 
+    let txFilterMode = 'all';
+
+    function setTxFilter(mode) {
+      txFilterMode = mode === 'uncertain' ? 'uncertain' : 'all';
+      const btnAll = document.getElementById('btn-tx-all');
+      const btnUnc = document.getElementById('btn-tx-uncertain');
+      if (btnAll && btnUnc) {
+        if (txFilterMode === 'uncertain') {
+          btnUnc.classList.add('tab-active');
+          btnUnc.classList.remove('bg-[var(--secondary)]');
+          btnAll.classList.remove('tab-active');
+          btnAll.classList.add('bg-[var(--secondary)]');
+        } else {
+          btnAll.classList.add('tab-active');
+          btnAll.classList.remove('bg-[var(--secondary)]');
+          btnUnc.classList.remove('tab-active');
+          btnUnc.classList.add('bg-[var(--secondary)]');
+        }
+      }
+      renderAll(false);
+    }
+
+    function ensureMonthlyBucket(ym) {
+      if (!appState.monthlyData) appState.monthlyData = {};
+      if (!appState.monthlyData[ym]) {
+        appState.monthlyData[ym] = {
+          inflowTotals: { pgCard: 0, wirelessCard: 0, cashHana: 0, platformKyongnam: 0, naverPay: 0, kakaoPay: 0 },
+          outflowTotals: { payroll: 0, lease: 0, taxInsRent: 0, rent: 0, supplyCard: 0, marketingCard: 0, welfareOtherCard: 0 },
+          cards: {
+            card13: { currentMonthSwipes: 0, confirmedNextWithdraw: 0 },
+            card14: { currentMonthSwipes: 0, confirmedNextWithdraw: 0 },
+            card23: { currentMonthSwipes: 0, confirmedNextWithdraw: 0 },
+            scheduledSupplyTransfer20: 0
+          },
+          endBalances: { woori: null, kyongnam: null },
+          latestDt: { woori: '', kyongnam: '' },
+          transactions: []
+        };
+      }
+      return appState.monthlyData[ym];
+    }
+
+    function syncLatestMonthToTopLevel() {
+      const keys = Object.keys(appState.monthlyData || {}).sort().reverse();
+      if (!keys.length) return;
+      const latestYm = keys[0];
+      const latest = appState.monthlyData[latestYm];
+      appState.inflowTotals = cloneObj(latest.inflowTotals);
+      appState.outflowTotals = cloneObj(latest.outflowTotals);
+      appState.cards = cloneObj(latest.cards);
+      appState.transactions = latest.transactions.slice(0, 150);
+
+      for (let i = 0; i < keys.length; i++) {
+        const eb = appState.monthlyData[keys[i]].endBalances;
+        if (eb && eb.woori !== null) { appState.balances.woori = eb.woori; break; }
+      }
+      for (let i = 0; i < keys.length; i++) {
+        const eb = appState.monthlyData[keys[i]].endBalances;
+        if (eb && eb.kyongnam !== null) { appState.balances.kyongnam = eb.kyongnam; break; }
+      }
+    }
+
+    function syncMonthSelectOptions() {
+      const sel = document.getElementById('pnl-month-select');
+      if (!sel) return;
+      const keys = Object.keys(appState.monthlyData || {}).sort().reverse();
+      if (!keys.length) {
+        sel.innerHTML = '<option value="cur">당월 실시간 누적</option><option value="prev1">전월 공식 마감</option><option value="prev2">전전월 공식 마감</option>';
+        return;
+      }
+      const prevVal = sel.value;
+      sel.innerHTML = keys.map(function(ym) {
+        const parts = ym.split('-');
+        const label = parts[0] + '년 ' + parseInt(parts[1], 10) + '월 실제 내역 (24일 공식기준 · 엑셀 집계)';
+        return '<option value="' + ym + '">' + label + '</option>';
+      }).join('');
+      if (keys.indexOf(prevVal) !== -1) {
+        sel.value = prevVal;
+      } else {
+        sel.value = keys[0];
+      }
+    }
+
+    function getActiveMonthView() {
+      const sel = document.getElementById('pnl-month-select');
+      const val = sel ? sel.value : 'cur';
+      if (appState.monthlyData && appState.monthlyData[val]) {
+        return { ym: val, data: appState.monthlyData[val], isMonthly: true };
+      }
+      return { ym: val, data: appState, isMonthly: false };
+    }
+
     function decodeBankBuffer(buffer) {
       const utf8Text = new TextDecoder('utf-8').decode(buffer);
       if (utf8Text.includes('거래일시') || utf8Text.includes('계좌번호') || utf8Text.includes('일자')) {
@@ -1432,26 +1551,62 @@
       const acctKey = detectedAcct || (bank === 'kyongnam' ? '207-0172-8715-04' : '1005-104-863854');
       const kwList = String(appState.settings.internalKeywords || '집금,내통장,내부,피부과').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
 
+      const parsedRaw = [];
       targetRows.forEach(function(tr) {
         const cells = Array.from(tr.querySelectorAll('td')).map(function(td) { return (td.textContent || '').trim(); });
         if (cells.length < 6) return;
         const dt = cells[0];
         if (!/^\d{4}[.\-/]\d{2}[.\-/]\d{2}/.test(dt)) return;
+        const dtNorm = dt.replace(/\./g, '-');
         const summary = cells[1] || '';
         const desc = cells[2] || '';
-        const outAmt = parseInt((cells[3] || '').replace(/[^0-9]/g, ''), 10) || 0;
-        const inAmt = parseInt((cells[4] || '').replace(/[^0-9]/g, ''), 10) || 0;
-        const balRaw = (cells[5] || '').replace(/[^0-9]/g, '');
-        const bal = balRaw ? parseInt(balRaw, 10) : null;
-
+        const outAmt = parseWonNumber(cells[3]);
+        const inAmt = parseWonNumber(cells[4]);
+        const balRaw = String(cells[5] || '').trim();
+        const bal = balRaw ? parseWonNumber(balRaw) : null;
         if (outAmt === 0 && inAmt === 0 && bal === null) return;
+        parsedRaw.push({ dtNorm: dtNorm, summary: summary, desc: desc, outAmt: outAmt, inAmt: inAmt, bal: bal, cancelled: false });
+      });
 
-        if (bal !== null && dt >= latestDt) {
-          latestDt = dt;
+      for (let i = 0; i < parsedRaw.length; i++) {
+        const cur = parsedRaw[i];
+        if (cur.summary.includes('대체취소') && cur.inAmt > 0) {
+          cur.cancelled = true;
+          for (let j = i - 1; j >= Math.max(0, i - 3); j--) {
+            if (!parsedRaw[j].cancelled && parsedRaw[j].outAmt === cur.inAmt && parsedRaw[j].desc === cur.desc) {
+              parsedRaw[j].cancelled = true;
+              break;
+            }
+          }
+          for (let j = i + 1; j <= Math.min(parsedRaw.length - 1, i + 3); j++) {
+            if (!parsedRaw[j].cancelled && parsedRaw[j].outAmt === cur.inAmt && parsedRaw[j].desc === cur.desc) {
+              parsedRaw[j].cancelled = true;
+              break;
+            }
+          }
+        }
+      }
+
+      parsedRaw.forEach(function(row) {
+        const dtNorm = row.dtNorm;
+        const ym = dtNorm.slice(0, 7);
+        const bucket = ensureMonthlyBucket(ym);
+        const summary = row.summary;
+        const desc = row.desc;
+        const outAmt = row.outAmt;
+        const inAmt = row.inAmt;
+        const bal = row.bal;
+
+        if (bal !== null && dtNorm >= latestDt) {
+          latestDt = dtNorm;
           latestBal = bal;
         }
+        if (bal !== null && dtNorm >= (bucket.latestDt.woori || '')) {
+          bucket.latestDt.woori = dtNorm;
+          bucket.endBalances.woori = bal;
+        }
 
-        const fp = bank + '|' + acctKey + '|' + dt + '|' + outAmt + '|' + inAmt + '|' + (bal !== null ? bal : '') + '|' + summary + '|' + desc;
+        const fp = bank + '|' + acctKey + '|' + dtNorm + '|' + outAmt + '|' + inAmt + '|' + (bal !== null ? bal : '') + '|' + summary + '|' + desc;
         if (appState.processedIds.indexOf(fp) !== -1) {
           dupCount += 1;
           return;
@@ -1459,91 +1614,114 @@
         appState.processedIds.push(fp);
         if (outAmt === 0 && inAmt === 0) return;
 
-        const shortDt = dt.slice(5, 16).replace(/\./g, '/');
+        const shortDt = dtNorm.slice(5, 16).replace(/-/g, '/');
         const combined = summary + ' ' + desc;
         let badge = bank === 'kyongnam' ? '🟧 경남' : '🟦 우리';
         let txType = inAmt > 0 ? 'BANK_IN' : 'BANK_OUT';
         let sub = summary;
+        let isUncertain = false;
 
-        if (inAmt > 0) {
+        if (row.cancelled) {
+          badge = '🔄 대체취소(상계)';
+          sub = '이체오류/취소 (매출·지출 제외)';
+        } else if (inAmt > 0) {
           if (/갤럭시아/i.test(combined)) {
-            appState.inflowTotals.pgCard += inAmt;
+            bucket.inflowTotals.pgCard += inAmt;
             badge = '🟦 갤럭시아PG';
             sub = 'PG 정산입금';
           } else if (/위챗|알리|KSNET|ＫＳＮＥＴ/i.test(combined)) {
-            appState.inflowTotals.pgCard += inAmt;
+            bucket.inflowTotals.pgCard += inAmt;
             badge = '🟦 간편결제PG';
             sub = '위챗/알리(KSNET) 정산';
           } else if (/김대윤|유픽의원/.test(combined)) {
-            appState.inflowTotals.cashHana += inAmt;
+            bucket.inflowTotals.cashHana += inAmt;
             badge = '💵 현금입금';
             sub = '원장님 직접 현금입금';
-          } else if (/^(KB|하나|NH|현대|BC|신한|우|삼성|롯데)/i.test(desc) || /캐시백/.test(combined)) {
-            appState.inflowTotals.wirelessCard += inAmt;
-            badge = '💳 단말기정산';
-            sub = '카드사 단말기 정산';
+          } else if (/^(KB|하나|NH|현대|BC|신한|우|삼성|롯데)/i.test(desc) || /캐시백|환불|^\d{4}\s*(신한|삼성|현대|국민|하나|우리|롯데)/.test(combined)) {
+            bucket.inflowTotals.wirelessCard += inAmt;
+            badge = '💳 단말기·카드정산';
+            sub = '카드사 정산·캐시백';
+          } else if (/고용노동부|K-패스|결산이자|의료배상공제조합|JIN YINSHI/i.test(combined)) {
+            bucket.inflowTotals.cashHana += inAmt;
+            badge = '🟦 지원금·환급·이자';
+            sub = '정부지원/환급/이자수입';
           } else {
-            appState.inflowTotals.pgCard += inAmt;
-            badge = '🟦 기타입금';
+            bucket.inflowTotals.pgCard += inAmt;
+            badge = '🤔 기타입금(확인)';
+            sub = '확인 필요 (미분류 입금)';
+            isUncertain = true;
           }
         } else if (outAmt > 0) {
-          const isInternal = (/김대윤/.test(desc) && !/국고|서울특징/.test(desc)) || kwList.some(function(kw) { return combined.includes(kw); });
-          const dayNum = parseInt(dt.slice(8, 10), 10) || 0;
+          const isInternal = (/김대윤/.test(desc) && !/국고|서울특징|KB손보/.test(desc)) || kwList.some(function(kw) { return combined.includes(kw); });
+          const dayNum = parseInt(dtNorm.slice(8, 10), 10) || 0;
 
           if (isInternal) {
             badge = '🔄 내부/본인이체';
             sub = '경비 제외 (본인·내부이체)';
+          } else if (/대신제50호|임대|월세|관리비/i.test(combined)) {
+            bucket.outflowTotals.rent += outAmt;
+            badge = '🏢 임대료(SC대신)';
+            sub = '25일경 건물 임대료 이체';
           } else if (/오릭스|캐피탈|ＢＮＫ캐피탈|BNK캐피탈|리스/i.test(combined)) {
-            appState.outflowTotals.lease = (appState.outflowTotals.lease || 0) + outAmt;
+            bucket.outflowTotals.lease += outAmt;
             badge = '⚙️ 장비리스료';
             sub = '5일 리스 출금';
-          } else if (/국고|서울특징|국민연금|건강보험|고용보험|산재보험|원천세|지방세/i.test(combined)) {
-            appState.outflowTotals.taxInsRent = (appState.outflowTotals.taxInsRent || 0) + outAmt;
+          } else if (/국고|서울특징|국민연금|건강보험|고용보험|산재보험|원천세|지방세|유어택스/i.test(combined)) {
+            bucket.outflowTotals.taxInsRent += outAmt;
             badge = '🏛️ 세금·4대보험';
-            sub = '10일 세금·공과금';
-          } else if (/임대|월세|관리비/i.test(combined)) {
-            appState.outflowTotals.rent = (appState.outflowTotals.rent || 0) + outAmt;
-            badge = '🏢 임대료';
-            sub = '25일경 임대료 이체';
-          } else if (/삼성카드|우리카드|롯데카드|신한카드|ＫＢ카드|KB카드|현대카드|경남카드/i.test(combined)) {
-            if (/삼성카드/i.test(combined)) appState.cards.card13.currentMonthSwipes += outAmt;
-            else if (/경남카드/i.test(combined)) appState.cards.card23.currentMonthSwipes += outAmt;
-            else appState.cards.card14.currentMonthSwipes += outAmt;
-            appState.outflowTotals.welfareOtherCard += outAmt;
+            sub = '10일 세금·4대보험·세무';
+          } else if (/삼성카드|우리카드|롯데카드|신한카드|ＫＢ카드|KB카드|현대카드|경남카드|경남비씨카드|하나카드/i.test(combined)) {
+            if (/삼성카드/i.test(combined)) bucket.cards.card13.currentMonthSwipes += outAmt;
+            else if (/경남카드|경남비씨/i.test(combined)) bucket.cards.card23.currentMonthSwipes += outAmt;
+            else bucket.cards.card14.currentMonthSwipes += outAmt;
             badge = '💳 카드대금출금';
             sub = '사업자카드 결제출금';
-          } else if (/힐링페이퍼|힐링페|강남언니|바비톡|네이버|메타|크리에이트/i.test(combined)) {
-            appState.outflowTotals.marketingCard += outAmt;
-            badge = '📢 마케팅비';
-            sub = '광고·플랫폼 비용';
-          } else if ((dayNum >= 4 && dayNum <= 6 && /모바일/.test(summary)) || /^(하나|신한|국민|우리|토뱅|카카|농협)[가-힣A-Z\s]{2,12}$/.test(desc) && outAmt >= 500000) {
-            appState.outflowTotals.payroll = (appState.outflowTotals.payroll || 0) + outAmt;
+          } else if (/주식회사 에이티|씨메디|애브비|오멜론|재료/i.test(combined)) {
+            bucket.cards.scheduledSupplyTransfer20 += outAmt;
+            badge = '💉 재료·약품이체';
+            sub = '에이티/애브비 등 거래처 이체';
+          } else if (/힐링페이퍼|힐링페|강남언니|바비톡|네이버|메타|크리에이트|레드테이블/i.test(combined)) {
+            bucket.outflowTotals.marketingCard += outAmt;
+            badge = '📢 마케팅·유치비';
+            sub = '광고·강남언니·레드테이블';
+          } else if (/글로벌텍스프리/i.test(combined)) {
+            bucket.outflowTotals.welfareOtherCard += outAmt;
+            badge = '🌐 택스리펀정산';
+            sub = '글로벌텍스프리 정산출금';
+          } else if (/찬솔크린|서울위생|노무사|헤이페이|다우기술|렌탈케어|인텔릭스|KT통신|비즈플레이|대한의사협회|대출이자|한도미사용|KB손보|제이앤씨|한국의료분|Npay/i.test(combined)) {
+            bucket.outflowTotals.welfareOtherCard += outAmt;
+            badge = '🏥 병원운영·고정비';
+            sub = '청소/위생/대출/렌탈/보험';
+          } else if ((dayNum >= 4 && dayNum <= 6 && /모바일/.test(summary)) || (/^(하나|신한|국민|우리|토뱅|카카|농협)[가-힣A-Z\s]{2,15}$/.test(desc) && outAmt >= 150000)) {
+            bucket.outflowTotals.payroll += outAmt;
             badge = '👥 급여';
             sub = '5일 직원 급여이체';
           } else {
-            appState.outflowTotals.welfareOtherCard += outAmt;
-            badge = '📌 운영·기타';
+            bucket.outflowTotals.welfareOtherCard += outAmt;
+            badge = '🤔 운영·기타(확인)';
+            sub = '확인 필요 (미분류 지출)';
+            isUncertain = true;
           }
         }
 
-        appState.transactions.unshift({
+        bucket.transactions.push({
           id: fp,
           datetime: shortDt,
+          sortDt: dtNorm,
           type: txType,
           badge: badge,
           title: maskCustomerName(desc || summary || '거래내역'),
           sub: sub,
-          amount: inAmt > 0 ? inAmt : outAmt
+          amount: inAmt > 0 ? inAmt : outAmt,
+          isUncertain: isUncertain
         });
         addedCount += 1;
       });
 
+      syncLatestMonthToTopLevel();
+      syncMonthSelectOptions();
       if (latestBal !== null) {
-        appState.balances[bank] = latestBal;
-        appState.balances.updatedAt = (bank === 'kyongnam' ? '경남 ' : '우리 ') + latestDt.slice(5, 16) + ' 엑셀반영';
-      }
-      if (appState.transactions.length > 150) {
-        appState.transactions = appState.transactions.slice(0, 150);
+        appState.balances.updatedAt = '우리 ' + latestDt.slice(5, 16) + ' 엑셀반영';
       }
 
       syncInputsFromState();
@@ -1616,9 +1794,16 @@
         if (outAmt === 0 && inAmt === 0 && bal === null) continue;
 
         const dtNorm = dt.replace(/\./g, '-');
+        const ym = dtNorm.slice(0, 7);
+        const bucket = ensureMonthlyBucket(ym);
+
         if (bal !== null && dtNorm >= latestDt) {
           latestDt = dtNorm;
           latestBal = bal;
+        }
+        if (bal !== null && dtNorm >= (bucket.latestDt.kyongnam || '')) {
+          bucket.latestDt.kyongnam = dtNorm;
+          bucket.endBalances.kyongnam = bal;
         }
 
         const fp = 'kyongnam|207-0172-8715-04|' + dtNorm + '|' + outAmt + '|' + inAmt + '|' + (bal !== null ? bal : '') + '|' + kind + '|' + desc;
@@ -1634,58 +1819,73 @@
         let badge = '🟧 경남';
         let txType = inAmt > 0 ? 'BANK_IN' : 'BANK_OUT';
         let sub = kind || ioType;
+        let isUncertain = false;
 
         if (inAmt > 0) {
           if (/갤럭시아/i.test(combined)) {
-            appState.inflowTotals.pgCard += inAmt;
+            bucket.inflowTotals.pgCard += inAmt;
             badge = '🟦 갤럭시아PG';
             sub = '경남 계좌 PG 정산입금';
           } else if (/힐링페이퍼|강남언니|여신티켓|바비톡|언니가이드/i.test(combined)) {
-            appState.inflowTotals.platformKyongnam += inAmt;
+            bucket.inflowTotals.platformKyongnam += inAmt;
             badge = /힐링/.test(combined) ? '🟧 강남언니' : '🟧 여신티켓';
             sub = '플랫폼 정산입금';
-          } else if (/^(KB|하나|NH|현대|BC|신한|우|삼성|롯데)/i.test(desc)) {
-            appState.inflowTotals.wirelessCard += inAmt;
-            badge = '💳 단말기정산';
-            sub = '카드사 단말기 정산';
+          } else if (/김대윤/.test(desc)) {
+            badge = '🔄 내부/본인이체';
+            sub = '원장님 계좌간 이동 (매출 제외)';
+          } else if (/제로페이|비씨카드|캐시백|^(KB|하나|NH|현대|BC|신한|우|삼성|롯데)/i.test(desc)) {
+            bucket.inflowTotals.wirelessCard += inAmt;
+            badge = '💳 제로페이·카드정산';
+            sub = '제로페이·캐시백·카드 정산';
+          } else if (/결산이자/.test(combined)) {
+            bucket.inflowTotals.platformKyongnam += inAmt;
+            badge = '🏦 예금이자';
+            sub = '경남 예금결산이자';
           } else {
-            appState.inflowTotals.platformKyongnam += inAmt;
-            badge = '🟧 경남입금';
+            bucket.inflowTotals.platformKyongnam += inAmt;
+            badge = '🤔 경남기타입금';
+            isUncertain = true;
           }
         } else if (outAmt > 0) {
-          const isInternal = (/김대윤/.test(desc) && !/국고|서울특징/.test(desc)) || kwList.some(function(kw) { return combined.includes(kw); });
+          const isInternal = /김대윤/.test(desc) || kwList.some(function(kw) { return combined.includes(kw); });
           const dayNum = parseInt(dtNorm.slice(8, 10), 10) || 0;
           if (isInternal) {
             badge = '🔄 내부/본인이체';
             sub = '경비 제외 (본인·내부이체)';
-          } else if (dayNum >= 4 && dayNum <= 6 && outAmt >= 500000) {
-            appState.outflowTotals.payroll = (appState.outflowTotals.payroll || 0) + outAmt;
-            badge = '👥 급여/인건비';
-            sub = '5일 전후 이체';
+          } else if (/대출이자/.test(combined)) {
+            bucket.outflowTotals.welfareOtherCard += outAmt;
+            badge = '🏦 대출이자(경남)';
+            sub = '경남은행 대출이자 출금';
+          } else if (/문혜연/.test(combined) || (dayNum >= 4 && dayNum <= 6 && outAmt >= 500000)) {
+            bucket.outflowTotals.payroll += outAmt;
+            badge = '👥 5일 정기자문·급여';
+            sub = '매월 5일 지급';
           } else {
-            appState.outflowTotals.welfareOtherCard += outAmt;
-            badge = '🟧 경남출금';
+            bucket.outflowTotals.welfareOtherCard += outAmt;
+            badge = '🤔 경남출금(확인)';
+            sub = '확인 필요 (미분류 지출)';
+            isUncertain = true;
           }
         }
 
-        appState.transactions.unshift({
+        bucket.transactions.push({
           id: fp,
           datetime: shortDt,
+          sortDt: dtNorm,
           type: txType,
           badge: badge,
           title: maskCustomerName(desc || kind || '경남거래'),
           sub: sub,
-          amount: inAmt > 0 ? inAmt : outAmt
+          amount: inAmt > 0 ? inAmt : outAmt,
+          isUncertain: isUncertain
         });
         addedCount += 1;
       }
 
+      syncLatestMonthToTopLevel();
+      syncMonthSelectOptions();
       if (latestBal !== null) {
-        appState.balances.kyongnam = latestBal;
         appState.balances.updatedAt = '경남 ' + latestDt.slice(5, 16) + ' 엑셀반영';
-      }
-      if (appState.transactions.length > 150) {
-        appState.transactions = appState.transactions.slice(0, 150);
       }
 
       syncInputsFromState();
@@ -1696,66 +1896,55 @@
     }
 
     function handleFileUpload(event) {
-      const file = event.target.files && event.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        const text = decodeBankBuffer(e.target.result);
-        const toast = document.getElementById('sim-toast');
+      const files = Array.from(event.target.files || []);
+      if (!files.length) return;
+      const toast = document.getElementById('sim-toast');
 
-        if (/<table/i.test(text) && text.includes('거래일시')) {
-          const res = importBankHtmlTable(text);
-          if (res && res.error) {
-            toast.textContent = '⚠️ ' + res.error;
-            toast.classList.remove('hidden');
-            event.target.value = '';
-            return;
-          }
-          if (res) {
-            toast.textContent = '✅ [' + file.name + '] 신규 ' + res.addedCount + '건 반영 완료!' +
-              (res.dupCount > 0 ? ' (중복 기간 ' + res.dupCount + '건 자동 제외됨)' : '') +
-              (res.latestBal !== null ? ' · 최신 잔액 ' + fmtWon(res.latestBal) : '');
-            toast.classList.remove('hidden');
-            event.target.value = '';
-            return;
-          }
-        }
+      let totalAdded = 0;
+      let totalDup = 0;
+      let errors = [];
 
-        if (text.includes('거래일시') && text.includes('출금금액') && text.includes('입금금액')) {
-          const res = importKyongnamCsv(text);
-          if (res) {
-            toast.textContent = '✅ [' + file.name + ' · 경남은행] 신규 ' + res.addedCount + '건 반영 완료!' +
-              (res.dupCount > 0 ? ' (중복 기간 ' + res.dupCount + '건 자동 제외됨)' : '') +
-              (res.latestBal !== null ? ' · 최신 잔액 ' + fmtWon(res.latestBal) : '');
-            toast.classList.remove('hidden');
-            event.target.value = '';
-            return;
-          }
-        }
-
-        const lines = text.split(/\r?\n/).map(function(l) { return l.trim(); }).filter(Boolean);
-        let count = 0;
-        let dupCount = 0;
-        let excludedWoori = 0;
-        lines.forEach(function(line) {
-          if (!/^(거래일시|승인일시|결제일자|일자|번호|구분|은행명),/.test(line)) {
-            const fp = 'line|' + line;
-            if (appState.processedIds.indexOf(fp) !== -1) {
-              dupCount += 1;
-              return;
+      const readOne = function(file) {
+        return new Promise(function(resolve) {
+          const reader = new FileReader();
+          reader.onload = function(e) {
+            const text = decodeBankBuffer(e.target.result);
+            if (/<table/i.test(text) && text.includes('거래일시')) {
+              const res = importBankHtmlTable(text);
+              if (res && res.error) errors.push(file.name + ': ' + res.error);
+              else if (res) { totalAdded += res.addedCount; totalDup += res.dupCount; }
+              return resolve();
             }
-            const res = processRecordText(line, fp);
-            if (res === 'EXCLUDED_WOORI') excludedWoori += 1;
-            else count += 1;
-          }
+            if (text.includes('거래일시') && text.includes('출금금액') && text.includes('입금금액')) {
+              const res = importKyongnamCsv(text);
+              if (res) { totalAdded += res.addedCount; totalDup += res.dupCount; }
+              return resolve();
+            }
+            const lines = text.split(/\r?\n/).map(function(l) { return l.trim(); }).filter(Boolean);
+            lines.forEach(function(line) {
+              if (!/^(거래일시|승인일시|결제일자|일자|번호|구분|은행명),/.test(line)) {
+                const fp = 'line|' + line;
+                if (appState.processedIds.indexOf(fp) !== -1) { totalDup += 1; return; }
+                const res = processRecordText(line, fp);
+                if (res !== 'EXCLUDED_WOORI') totalAdded += 1;
+              }
+            });
+            resolve();
+          };
+          reader.readAsArrayBuffer(file);
         });
-        toast.textContent = '📂 [' + file.name + '] 신규 ' + count + '건 반영 완료!' +
-          (dupCount > 0 ? ' (중복 ' + dupCount + '건 자동 제외)' : '') +
-          (excludedWoori > 0 ? ' (타계좌 ' + excludedWoori + '건 제외)' : '');
+      };
+
+      Promise.all(files.map(readOne)).then(function() {
+        const monthsCount = Object.keys(appState.monthlyData || {}).length;
+        let msg = '✅ 총 ' + files.length + '개 파일 처리 완료: 신규 ' + totalAdded + '건 반영';
+        if (totalDup > 0) msg += ' · 중복 ' + totalDup + '건 자동 제외';
+        if (monthsCount > 0) msg += ' (' + monthsCount + '개월 누적)';
+        if (errors.length > 0) msg += ' | ⚠️ ' + errors.join(', ');
+        toast.textContent = msg;
         toast.classList.remove('hidden');
         event.target.value = '';
-      };
-      reader.readAsArrayBuffer(file);
+      });
     }
 
     function applySimPreset(supplyPct, mktPct, revPct, fixedMan) {
@@ -2014,6 +2203,8 @@
       realBackupState = null;
       document.getElementById('sim-active-banner').classList.add('hidden');
       appState = cloneObj(INITIAL_STATE);
+      appState.monthlyData = {};
+      syncMonthSelectOptions();
       testCount = 0;
       const cntEl = document.getElementById('sim-click-count');
       if (cntEl) cntEl.textContent = '수집 반영: 0건';
@@ -2063,7 +2254,9 @@
         welfareOtherCard: 0
       };
       appState.processedIds = [];
+      appState.monthlyData = {};
       appState.transactions = [];
+      syncMonthSelectOptions();
 
       testCount = 0;
       const cntEl = document.getElementById('sim-click-count');
@@ -2115,7 +2308,8 @@
       if (lbl) lbl.textContent = m + '월 ' + d + '일 기준';
 
       const sel = document.getElementById('pnl-month-select');
-      if (sel && sel.options.length >= 3) {
+      const hasMonthly = appState.monthlyData && Object.keys(appState.monthlyData).length > 0;
+      if (sel && !hasMonthly && sel.options.length >= 3) {
         sel.options[0].text = m + '월 실시간 누적 (매월 24일 공식 확정 기준 · 실시간 반영)';
         sel.options[1].text = prevM + '월 공식 마감 (' + prevM + '/24 경남카드 출금 후 확정 완료)';
         sel.options[2].text = prev2M + '월 공식 마감 (' + prev2M + '/24 정산확정 완료)';
@@ -2125,23 +2319,29 @@
     function renderAll(flash) {
       updateDynamicDateLabels();
 
-      const inf = appState.inflowTotals;
-      const totalInflow = inf.pgCard + inf.wirelessCard + inf.cashHana + inf.platformKyongnam + inf.naverPay + inf.kakaoPay;
-      const card13Swipes = (appState.cards.card13 && appState.cards.card13.currentMonthSwipes) || 0;
-      const card14Swipes = (appState.cards.card14 && appState.cards.card14.currentMonthSwipes) || 0;
-      const card23Swipes = (appState.cards.card23 && appState.cards.card23.currentMonthSwipes) || 0;
-      const totalCardSwipes = card13Swipes + card14Swipes + card23Swipes;
-      const cashSupply20 = appState.cards.scheduledSupplyTransfer20;
+      const view = getActiveMonthView();
+      const vData = view.data;
+      const inf = vData.inflowTotals || appState.inflowTotals;
+      const vOut = vData.outflowTotals || appState.outflowTotals;
+      const vCards = vData.cards || appState.cards;
+      const vTxs = vData.transactions || appState.transactions || [];
 
-      const fixedCosts = (appState.outflowTotals.payroll || 0) + (appState.outflowTotals.lease || 0) + (appState.outflowTotals.taxInsRent || 0) + (appState.outflowTotals.rent || 0);
-      const variableAndCardCosts = totalCardSwipes + cashSupply20;
+      const totalInflow = inf.pgCard + inf.wirelessCard + inf.cashHana + inf.platformKyongnam + inf.naverPay + inf.kakaoPay;
+      const card13Swipes = (vCards.card13 && vCards.card13.currentMonthSwipes) || 0;
+      const card14Swipes = (vCards.card14 && vCards.card14.currentMonthSwipes) || 0;
+      const card23Swipes = (vCards.card23 && vCards.card23.currentMonthSwipes) || 0;
+      const totalCardSwipes = card13Swipes + card14Swipes + card23Swipes;
+      const cashSupply20 = vCards.scheduledSupplyTransfer20 || 0;
+
+      const fixedCosts = (vOut.payroll || 0) + (vOut.lease || 0) + (vOut.taxInsRent || 0) + (vOut.rent || 0);
+      const variableAndCardCosts = totalCardSwipes + cashSupply20 + (vOut.marketingCard || 0) + (vOut.welfareOtherCard || 0);
       const taxCalc = calcTaxes(totalInflow, fixedCosts + variableAndCardCosts, appState.settings);
       const taxReserve = taxCalc.totalTaxReserve;
       const netProfitCur = taxCalc.netProfit;
       const marginCur = ((netProfitCur / Math.max(1, totalInflow)) * 100).toFixed(1) + '%';
 
-      const totalSupplyCost = appState.outflowTotals.supplyCard + cashSupply20;
-      const nonSupplyFixed = fixedCosts + appState.outflowTotals.marketingCard + appState.outflowTotals.welfareOtherCard;
+      const totalSupplyCost = (vOut.supplyCard || 0) + cashSupply20;
+      const nonSupplyFixed = fixedCosts + (vOut.marketingCard || 0) + (vOut.welfareOtherCard || 0);
       const calculatedBep = calculateBep(totalInflow, nonSupplyFixed, totalSupplyCost, taxCalc.vatRate);
 
       const totalBankNow = (appState.balances.woori || 0) + (appState.balances.kyongnam || 0);
@@ -2173,13 +2373,31 @@
       document.getElementById('lbl-income-tax-rate').textContent = (taxCalc.incomeTaxRate * 100).toFixed(1);
 
       const selectedMonth = document.getElementById('pnl-month-select').value;
-      if (selectedMonth === 'cur') {
-        document.getElementById('pnl-title-badge').textContent = '당월 실시간 손익 (13·14·23일 카드 + 20일 현금재료비 모두 반영)';
+      if (view.isMonthly || selectedMonth === 'cur') {
+        document.getElementById('pnl-title-badge').textContent = view.isMonthly
+          ? (view.ym + ' 실제 월별 손익 (엑셀 수집 ' + vTxs.length + '건 · 13·14·23일 카드 + 20일 재료비)')
+          : '당월 실시간 손익 (13·14·23일 카드 + 20일 현금재료비 모두 반영)';
         document.getElementById('pnl-verdict-tag').textContent = netProfitCur >= 0 ? '흑자' : '적자';
         document.getElementById('pnl-net-profit').textContent = (netProfitCur >= 0 ? '+' : '') + fmtWon(netProfitCur);
         document.getElementById('pnl-margin').textContent = marginCur;
-        document.getElementById('pnl-day24-sub').textContent = '전월24일(' + fmtMan(day24Base) + ') ➔ 현재(' + fmtMan(totalBankNow) + ')';
-        const diff24 = totalBankNow - day24Base;
+
+        const mKeys = Object.keys(appState.monthlyData || {}).sort();
+        let activeEndBal = totalBankNow;
+        let prevEndBal = day24Base;
+        if (view.isMonthly && vData.endBalances) {
+          const ebW = vData.endBalances.woori !== null ? vData.endBalances.woori : appState.balances.woori;
+          const ebK = vData.endBalances.kyongnam !== null ? vData.endBalances.kyongnam : 0;
+          activeEndBal = ebW + ebK;
+          const idx = mKeys.indexOf(view.ym);
+          if (idx > 0 && appState.monthlyData[mKeys[idx - 1]].endBalances) {
+            const pEb = appState.monthlyData[mKeys[idx - 1]].endBalances;
+            prevEndBal = (pEb.woori || 0) + (pEb.kyongnam || 0);
+          }
+        }
+        document.getElementById('pnl-day24-sub').textContent = view.isMonthly
+          ? ('전월말(' + fmtMan(prevEndBal) + ') ➔ 월말(' + fmtMan(activeEndBal) + ')')
+          : ('전월24일(' + fmtMan(day24Base) + ') ➔ 현재(' + fmtMan(totalBankNow) + ')');
+        const diff24 = activeEndBal - prevEndBal;
         document.getElementById('pnl-day24-diff').textContent = (diff24 >= 0 ? '+' : '') + fmtWon(diff24);
 
         document.getElementById('pnl-rev').textContent = '+' + fmtMan(totalInflow);
@@ -2192,10 +2410,10 @@
         document.getElementById('bep-bar').style.width = bepRatio + '%';
 
         document.getElementById('row-pnl-rev').textContent = '+' + fmtWon(totalInflow);
-        document.getElementById('row-pnl-payroll').textContent = '-' + fmtWon(appState.outflowTotals.payroll || 0);
-        document.getElementById('row-pnl-lease').textContent = '-' + fmtWon(appState.outflowTotals.lease || 0);
-        document.getElementById('row-pnl-taxins').textContent = '-' + fmtWon(appState.outflowTotals.taxInsRent || 0);
-        document.getElementById('row-pnl-rent').textContent = '-' + fmtWon(appState.outflowTotals.rent || 0);
+        document.getElementById('row-pnl-payroll').textContent = '-' + fmtWon(vOut.payroll || 0);
+        document.getElementById('row-pnl-lease').textContent = '-' + fmtWon(vOut.lease || 0);
+        document.getElementById('row-pnl-taxins').textContent = '-' + fmtWon(vOut.taxInsRent || 0);
+        document.getElementById('row-pnl-rent').textContent = '-' + fmtWon(vOut.rent || 0);
         document.getElementById('row-pnl-card13').textContent = '-' + fmtWon(card13Swipes);
         document.getElementById('row-pnl-card14').textContent = '-' + fmtWon(card14Swipes);
         document.getElementById('row-pnl-supplycash').textContent = '-' + fmtWon(cashSupply20);
@@ -2299,7 +2517,7 @@
       document.getElementById('card-supply-cash-amt').textContent = fmtWon(cashSupply20);
       document.getElementById('card-total-unbilled').textContent = '이달 카드누적 ' + fmtWon(totalCardSwipes);
 
-      const swipeTxs = appState.transactions.filter(function(t) { return t.type === 'CARD_SWIPE'; }).slice(0, 6);
+      const swipeTxs = vTxs.filter(function(t) { return t.type === 'CARD_SWIPE' || t.badge === '💳 카드대금출금'; }).slice(0, 12);
       document.getElementById('card-swipe-list').innerHTML = swipeTxs.map(function(t) {
         const amtColor = t.amount < 0 ? 'text-[var(--primary)]' : '';
         return '<div class="py-2 flex items-center justify-between gap-2">' +
@@ -2312,37 +2530,78 @@
         '</div>';
       }).join('');
 
-      const bankOutSum = appState.transactions
-        .filter(function(t) { return t.type === 'BANK_OUT'; })
-        .reduce(function(s, t) { return s + Math.abs(t.amount); }, 0);
-      const periodOut = fixedCosts + ((appState.settings && appState.settings.realDataMode) ? bankOutSum : 14800000);
+      const compBody = document.getElementById('monthly-comparison-body');
+      if (compBody) {
+        const ymKeys = Object.keys(appState.monthlyData || {}).sort();
+        if (!ymKeys.length) {
+          compBody.innerHTML = '<tr><td colspan="7" class="py-3 text-center text-[var(--muted-foreground)]">엑셀 파일을 올리시면 월별 10개월 비교표가 자동 생성됩니다.</td></tr>';
+        } else {
+          compBody.innerHTML = ymKeys.map(function(ym) {
+            const mD = appState.monthlyData[ym];
+            const mInf = mD.inflowTotals;
+            const mOut = mD.outflowTotals;
+            const mC = mD.cards;
+            const rev = mInf.pgCard + mInf.wirelessCard + mInf.cashHana + mInf.platformKyongnam + mInf.naverPay + mInf.kakaoPay;
+            const fix = (mOut.payroll || 0) + (mOut.lease || 0) + (mOut.taxInsRent || 0) + (mOut.rent || 0);
+            const cardTotal = ((mC.card13 && mC.card13.currentMonthSwipes) || 0) + ((mC.card14 && mC.card14.currentMonthSwipes) || 0) + ((mC.card23 && mC.card23.currentMonthSwipes) || 0);
+            const varCost = cardTotal + (mC.scheduledSupplyTransfer20 || 0) + (mOut.marketingCard || 0) + (mOut.welfareOtherCard || 0);
+            const tc = calcTaxes(rev, fix + varCost, appState.settings);
+            const ebW = (mD.endBalances && mD.endBalances.woori !== null) ? mD.endBalances.woori : 0;
+            const ebK = (mD.endBalances && mD.endBalances.kyongnam !== null) ? mD.endBalances.kyongnam : 0;
+            const isSel = view.isMonthly && view.ym === ym ? ' bg-[var(--secondary)] font-bold' : '';
+            const netCls = tc.netProfit >= 0 ? 'text-[var(--success)]' : 'text-[var(--error)]';
+            return '<tr class="cursor-pointer hover:bg-[var(--secondary)]' + isSel + '" onclick="document.getElementById(\'pnl-month-select\').value=\'' + ym + '\'; renderAll(true); switchTab(\'pnl\');">' +
+              '<td class="py-1.5 text-left font-bold">' + ym + '</td>' +
+              '<td class="py-1.5">' + fmtMan(rev) + '</td>' +
+              '<td class="py-1.5 text-[var(--error)]">-' + fmtMan(fix) + '</td>' +
+              '<td class="py-1.5 text-[var(--error)]">-' + fmtMan(varCost) + '</td>' +
+              '<td class="py-1.5 text-[var(--warning)]">-' + fmtMan(tc.totalTaxReserve) + '</td>' +
+              '<td class="py-1.5 font-bold ' + netCls + '">' + (tc.netProfit >= 0 ? '+' : '-') + fmtMan(tc.netProfit) + '</td>' +
+              '<td class="py-1.5 text-[var(--primary)]">' + fmtMan(ebW + ebK) + '</td>' +
+            '</tr>';
+          }).join('');
+        }
+      }
+
+      const periodOut = fixedCosts + variableAndCardCosts;
       const periodNet = totalInflow - periodOut;
       document.getElementById('period-in').textContent = '+' + fmtWon(totalInflow);
       document.getElementById('period-out').textContent = '-' + fmtWon(periodOut);
       document.getElementById('period-net').textContent = (periodNet >= 0 ? '+' : '') + fmtWon(periodNet);
 
-      document.getElementById('tx-log-list').innerHTML = appState.transactions.slice(0, 8).map(function(t) {
-        const color = t.type === 'BANK_IN' ? 'text-[var(--success)]' : (t.type === 'CARD_SWIPE' ? 'text-[var(--warning)]' : 'opacity-75');
-        const prefix = (t.type === 'BANK_IN' && t.amount > 0) ? '+' : (t.type === 'CARD_SWIPE' ? (t.amount < 0 ? '취소 ' : '승인 ') : '');
-        return '<div class="py-2 flex items-center justify-between gap-2">' +
+      const sortedTxs = vTxs.slice().sort(function(a, b) {
+        const da = a.sortDt || a.datetime || '';
+        const db = b.sortDt || b.datetime || '';
+        return db.localeCompare(da);
+      });
+      const uncertainTxs = sortedTxs.filter(function(t) { return Boolean(t.isUncertain); });
+      const uncBadge = document.getElementById('uncertain-count-badge');
+      if (uncBadge) uncBadge.textContent = String(uncertainTxs.length);
+
+      const displayTxs = (txFilterMode === 'uncertain' ? uncertainTxs : sortedTxs).slice(0, 60);
+      document.getElementById('tx-log-list').innerHTML = displayTxs.length ? displayTxs.map(function(t) {
+        const color = t.type === 'BANK_IN' ? 'text-[var(--success)]' : (t.type === 'CARD_SWIPE' ? 'text-[var(--warning)]' : 'opacity-80');
+        const prefix = (t.type === 'BANK_IN' && t.amount > 0) ? '+' : (t.type === 'CARD_SWIPE' ? (t.amount < 0 ? '취소 ' : '승인 ') : '-');
+        const uncBorder = t.isUncertain ? ' bg-[var(--secondary)]/50 px-2 rounded' : '';
+        return '<div class="py-2 flex items-center justify-between gap-2' + uncBorder + '">' +
           '<div class="truncate">' +
             '<span class="font-bold">' + escapeHtml(t.badge) + ' ' + escapeHtml(t.title) + '</span>' +
             '<div class="text-[var(--muted-foreground)] truncate">' + escapeHtml(t.datetime) + ' · ' + escapeHtml(t.sub) + '</div>' +
           '</div>' +
           '<span class="font-mono font-bold ' + color + ' shrink-0">' + prefix + fmtWon(t.amount) + '</span>' +
         '</div>';
-      }).join('');
+      }).join('') : '<div class="py-4 text-center text-[var(--muted-foreground)]">표시할 거래내역이 없습니다.</div>';
 
       const pgModeLabel = appState.settings.pgIsActual ? '갤럭시아 실데이터 연동됨' : '갤럭시아PG 연동';
-      document.getElementById('cat-in-header').textContent = '📥 수입 6대 항목 (' + pgModeLabel + ')';
+      document.getElementById('cat-in-header').textContent = '📥 수입 6대 항목 (' + (view.isMonthly ? view.ym : pgModeLabel) + ')';
       document.getElementById('cat-in-total').textContent = fmtWon(totalInflow);
       const inItems = [
-        { label: '💳 유선카드 (갤럭시아 D+1 · 우리/경남)', val: appState.inflowTotals.pgCard, c: 'var(--chart-1)' },
-        { label: '📟 무선단말기 카드 (우리·경남)', val: appState.inflowTotals.wirelessCard, c: 'var(--chart-2)' },
-        { label: '💵 고객 현금입금 (우리 직접입금)', val: appState.inflowTotals.cashHana, c: 'var(--chart-3)' },
-        { label: '💄 강남언니·언니가이드 (경남)', val: appState.inflowTotals.platformKyongnam, c: 'var(--chart-4)' },
-        { label: '🟢 네이버페이 (갤럭시아 D+3)', val: appState.inflowTotals.naverPay, c: 'var(--chart-5)' },
-        { label: '🟡 위챗·알리·카카오 (갤럭시아 D+3)', val: appState.inflowTotals.kakaoPay, c: 'var(--chart-6)' }
+        { label: '💳 유선카드·PG정산 (갤럭시아/KSNET)', val: inf.pgCard, c: 'var(--chart-1)' },
+        { label: '📟 단말기·제로페이·카드정산', val: inf.wirelessCard, c: 'var(--chart-2)' },
+        { label: '💵 현금입금·지원금·환급', val: inf.cashHana, c: 'var(--chart-3)' },
+        { label: '💄 강남언니·여신티켓 (경남)', val: inf.platformKyongnam, c: 'var(--chart-4)' },
+        { label: '🟢 네이버페이 (갤럭시아 D+3)', val: inf.naverPay, c: 'var(--chart-5)' },
+        { label: '🟡 위챗·알리·카카오 (갤럭시아 D+3)', val: inf.kakaoPay, c: 'var(--chart-6)' }
       ];
       document.getElementById('cat-in-bars').innerHTML = inItems.map(function(item) {
         const pct = ((item.val / Math.max(1, totalInflow)) * 100).toFixed(1);
@@ -2358,13 +2617,14 @@
       }).join('');
 
       const outItems = [
-        { label: '👥 급여 (5일 출금)', val: appState.outflowTotals.payroll || 0, c: 'var(--chart-1)' },
-        { label: '⚙️ 장비리스료 (5일 출금)', val: appState.outflowTotals.lease || 0, c: 'var(--chart-1)' },
-        { label: '🏛️ 세금·4대보험 (10일 출금)', val: appState.outflowTotals.taxInsRent || 0, c: 'var(--chart-2)' },
-        { label: '🏢 임대료 계좌이체 (25일경)', val: appState.outflowTotals.rent || 0, c: 'var(--chart-2)' },
-        { label: '💉 재료비 합계 (카드 + 20일 현금이체)', val: totalSupplyCost, c: 'var(--chart-3)' },
-        { label: '📢 마케팅·광고비 (13·14·23일 카드)', val: appState.outflowTotals.marketingCard, c: 'var(--chart-4)' },
-        { label: '🍱 식대·복리후생·기타 (카드)', val: appState.outflowTotals.welfareOtherCard, c: 'var(--chart-5)' }
+        { label: '👥 급여 (5일 출금)', val: vOut.payroll || 0, c: 'var(--chart-1)' },
+        { label: '⚙️ 장비리스료 (5일 출금)', val: vOut.lease || 0, c: 'var(--chart-1)' },
+        { label: '🏛️ 세금·4대보험 (10일 출금)', val: vOut.taxInsRent || 0, c: 'var(--chart-2)' },
+        { label: '🏢 임대료 계좌이체 (25일경)', val: vOut.rent || 0, c: 'var(--chart-2)' },
+        { label: '💉 재료비·약품이체 (카드+이체)', val: totalSupplyCost, c: 'var(--chart-3)' },
+        { label: '💳 사업자카드 출금 (13·14·23일)', val: totalCardSwipes, c: 'var(--chart-4)' },
+        { label: '📢 마케팅·유치수수료 (강남언니/레드테이블)', val: vOut.marketingCard || 0, c: 'var(--chart-4)' },
+        { label: '🏥 운영비·이자·텍스리펀·기타', val: vOut.welfareOtherCard || 0, c: 'var(--chart-5)' }
       ];
       const totalOutCat = outItems.reduce(function(a, b) { return a + b.val; }, 0);
       document.getElementById('cat-out-total').textContent = fmtWon(totalOutCat);
@@ -2424,6 +2684,7 @@
       } else {
         setScreenMode('unfolded');
       }
+      syncMonthSelectOptions();
       renderAll(false);
 
       // 로컬 PC 서버(127.0.0.1:3080) 연결 시 서버 원장 자동 동기화
@@ -2432,6 +2693,7 @@
         .then(function(data) {
           if (data && data.ok && data.state) {
             appState = data.state;
+            syncMonthSelectOptions();
             renderAll(false);
           }
         })
