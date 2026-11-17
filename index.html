@@ -150,12 +150,16 @@
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <label class="px-4 py-2 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] font-bold cursor-pointer hover:opacity-90">
-            📂 우리·경남 엑셀(.xls / .csv) 여러 파일 한꺼번에 올리기
-            <input id="excel-file-input" type="file" multiple accept=".xls,.xlsx,.csv,.txt,.tsv,.html,.htm" onchange="handleFileUpload(event)" class="hidden" />
+            🟦 우리은행 (1005-104-863854) 엑셀 올리기
+            <input id="excel-file-woori" type="file" multiple accept=".xls,.xlsx,.csv,.txt,.tsv,.html,.htm" onchange="handleFileUpload(event, 'woori')" class="hidden" />
           </label>
-          <span class="text-[11px] text-[var(--muted-foreground)]">
-            * 우리은행(1005-104-863854) 엑셀 그대로 올리시면 <b>급여·리스·세금·카드·갤럭시아·잔액</b>이 자동 분류되고, 이미 들어간 날짜/건은 자동 건너뜁니다.
-          </span>
+          <label class="px-4 py-2 rounded-lg bg-[var(--warning)] text-black font-bold cursor-pointer hover:opacity-90">
+            🟧 경남은행 (207-0172-8715-04) 엑셀 올리기
+            <input id="excel-file-kyongnam" type="file" multiple accept=".xls,.xlsx,.csv,.txt,.tsv,.html,.htm" onchange="handleFileUpload(event, 'kyongnam')" class="hidden" />
+          </label>
+        </div>
+        <div class="text-[11px] text-[var(--muted-foreground)]">
+          * 파일명이 같더라도 버튼만 구분해서 올려주시면 자동으로 계좌를 검증하고 중복 기간은 건너뜁니다.
         </div>
       </div>
 
@@ -1940,7 +1944,7 @@
       return { addedCount: addedCount, dupCount: dupCount, latestBal: latestBal, bank: 'kyongnam' };
     }
 
-    function handleFileUpload(event) {
+    function handleFileUpload(event, expectedBank) {
       const files = Array.from(event.target.files || []);
       if (!files.length) return;
       const toast = document.getElementById('sim-toast');
@@ -1957,10 +1961,16 @@
             if (/<table/i.test(text) && text.includes('거래일시')) {
               const res = importBankHtmlTable(text);
               if (res && res.error) errors.push(file.name + ': ' + res.error);
-              else if (res) { totalAdded += res.addedCount; totalDup += res.dupCount; }
+              else if (res && expectedBank && res.bank !== expectedBank) {
+                errors.push(file.name + ': 선택한 버튼과 다른 은행(' + (res.bank === 'woori' ? '우리은행' : '경남은행') + ') 파일입니다');
+              } else if (res) { totalAdded += res.addedCount; totalDup += res.dupCount; }
               return resolve();
             }
             if (text.includes('거래일시') && text.includes('출금금액') && text.includes('입금금액')) {
+              if (expectedBank === 'woori') {
+                errors.push(file.name + ': 경남은행 양식 파일입니다. [🟧 경남은행 엑셀 올리기] 버튼을 이용해 주세요');
+                return resolve();
+              }
               const res = importKyongnamCsv(text);
               if (res) { totalAdded += res.addedCount; totalDup += res.dupCount; }
               return resolve();
@@ -1982,7 +1992,8 @@
 
       Promise.all(files.map(readOne)).then(function() {
         const monthsCount = Object.keys(appState.monthlyData || {}).length;
-        let msg = '✅ 총 ' + files.length + '개 파일 처리 완료: 신규 ' + totalAdded + '건 반영';
+        const bankPrefix = expectedBank === 'woori' ? '🟦 우리은행 ' : (expectedBank === 'kyongnam' ? '🟧 경남은행 ' : '');
+        let msg = '✅ ' + bankPrefix + files.length + '개 파일 처리 완료: 신규 ' + totalAdded + '건 반영';
         if (totalDup > 0) msg += ' · 중복 ' + totalDup + '건 자동 제외';
         if (monthsCount > 0) msg += ' (' + monthsCount + '개월 누적)';
         if (errors.length > 0) msg += ' | ⚠️ ' + errors.join(', ');
