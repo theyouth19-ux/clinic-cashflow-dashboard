@@ -269,6 +269,21 @@ const server = http.createServer(async (req, res) => {
     try {
       const payload = await readJsonBody(req);
       const cfg = loadConfig();
+      if (payload && payload.wooriStep1) {
+        if (!cfg.banks) cfg.banks = {};
+        if (!cfg.banks.woori) cfg.banks.woori = { enabled: true, accountNumber: '1005-104-863854', onlyThisAccount: true };
+        if (payload.wooriStep1.birthDate6 !== undefined) {
+          cfg.banks.birthDate6 = String(payload.wooriStep1.birthDate6).trim();
+        }
+        if (payload.wooriStep1.queryPassword4 !== undefined) {
+          cfg.banks.woori.queryPassword4 = String(payload.wooriStep1.queryPassword4).trim();
+        }
+        cfg.banks.woori.accountNumber = '1005-104-863854';
+        cfg.banks.woori.onlyThisAccount = true;
+        saveConfig(cfg);
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        return res.end(JSON.stringify({ ok: true, savedToFile: CONFIG_FILE }));
+      }
       const updated = Object.assign({}, cfg, payload);
       saveConfig(updated);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
