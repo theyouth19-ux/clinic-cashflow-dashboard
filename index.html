@@ -1000,20 +1000,19 @@
       return { allowed: false, targetAccount: targetRaw, detectedAccount: detectedTokens[0] };
     }
 
+    const LOCAL_API_BASE = (window.location.port === '3080' && (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost')) ? '' : 'http://127.0.0.1:3080';
+
     function safeSaveState() {
       try {
         if (window.localStorage) {
           window.localStorage.setItem('clinic_dashboard_v5', JSON.stringify(appState));
         }
       } catch (e) {}
-      // 로컬 PC 서버(http://127.0.0.1:3080)에서 실행 중이면 서버 DB에도 자동 저장
-      if (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost') {
-        fetch('/api/state', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ state: appState })
-        }).catch(function() {});
-      }
+      fetch(LOCAL_API_BASE + '/api/state', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state: appState })
+      }).catch(function() {});
     }
 
     let appState = safeLoadState();
@@ -1771,35 +1770,30 @@
         }
       } catch (e) {}
 
-      if (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost') {
-        fetch('/api/config', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ wooriStep1: { birthDate6: birth, queryPassword4: pw } })
+      fetch(LOCAL_API_BASE + '/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wooriStep1: { birthDate6: birth, queryPassword4: pw } })
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data && data.ok) {
+            pwEl.value = '';
+            statusEl.className = 'text-[var(--success)] font-bold';
+            statusEl.textContent = '✅ config/collector_config.json 파일에 안전하게 저장되었습니다!';
+            toast.textContent = '✅ [1순서 저장 완료] 생년월일/사업자번호 및 비밀번호 4자리가 내 PC 전용 파일(config/collector_config.json)에 저장되었습니다. 이제 "저장했어"라고 말씀해 주세요!';
+            toast.classList.remove('hidden');
+          } else {
+            statusEl.className = 'text-[var(--error)] font-bold';
+            statusEl.textContent = '❌ 저장 실패: ' + ((data && data.error) || '서버 확인 필요');
+          }
         })
-          .then(function(r) { return r.json(); })
-          .then(function(data) {
-            if (data && data.ok) {
-              pwEl.value = '';
-              statusEl.className = 'text-[var(--success)] font-bold';
-              statusEl.textContent = '✅ config/collector_config.json 파일에 안전하게 저장되었습니다!';
-              toast.textContent = '✅ [1순서 저장 완료] 생년월일/사업자번호 및 비밀번호 4자리가 내 PC 전용 파일(config/collector_config.json)에 저장되었습니다. 이제 "우리은행 설정했어"라고 말씀해 주세요!';
-              toast.classList.remove('hidden');
-            } else {
-              statusEl.className = 'text-[var(--error)] font-bold';
-              statusEl.textContent = '❌ 저장 실패: ' + ((data && data.error) || '서버 확인 필요');
-            }
-          })
-          .catch(function() {
-            statusEl.className = 'text-[var(--warning)] font-bold';
-            statusEl.textContent = '⚠️ 로컬 서버(http://127.0.0.1:3080)에서 열어야 config/collector_config.json 파일에 직접 저장됩니다.';
-          });
-      } else {
-        statusEl.className = 'text-[var(--warning)] font-bold';
-        statusEl.textContent = '⚠️ PC 전용 주소(http://127.0.0.1:3080)에서 저장하거나 PC에 열린 메모장(collector_config.json)에 직접 입력해 주세요.';
-        toast.textContent = '💡 보안상 미리보기 창에서는 PC 설정 파일에 직접 쓰지 못합니다. 브라우저에서 http://127.0.0.1:3080 을 열어 저장하시거나, PC에 열린 메모장에 입력 후 저장(Ctrl+S)해 주세요!';
-        toast.classList.remove('hidden');
-      }
+        .catch(function() {
+          statusEl.className = 'text-[var(--warning)] font-bold';
+          statusEl.textContent = '⚠️ 브라우저에서 http://127.0.0.1:3080 을 열어 저장하거나 메모장(collector_config.json)에 직접 입력해 주세요.';
+          toast.textContent = '💡 미리보기 창 보안상 직접 저장이 막힌 경우, 방금 PC에 띄워드린 브라우저 창(http://127.0.0.1:3080)이나 메모장에 입력해 주세요!';
+          toast.classList.remove('hidden');
+        });
     }
 
     function updateDynamicDateLabels() {
@@ -2122,35 +2116,33 @@
       }
       renderAll(false);
 
-      // 로컬 PC 서버에서 실행 중인 경우 서버 원장 자동 동기화
-      if (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost') {
-        fetch('/api/state')
-          .then(function(r) { return r.json(); })
-          .then(function(data) {
-            if (data && data.ok && data.state) {
-              appState = data.state;
-              renderAll(false);
-            }
-          })
-          .catch(function() {});
+      // 로컬 PC 서버(127.0.0.1:3080) 연결 시 서버 원장 및 설정 상태 자동 동기화
+      fetch(LOCAL_API_BASE + '/api/state')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data && data.ok && data.state) {
+            appState = data.state;
+            renderAll(false);
+          }
+        })
+        .catch(function() {});
 
-        fetch('/api/config')
-          .then(function(r) { return r.json(); })
-          .then(function(data) {
-            if (data && data.ok && data.config && data.config.banks) {
-              const birthEl = document.getElementById('cfg-woori-birth');
-              const statusEl = document.getElementById('cfg-woori-status');
-              if (birthEl && data.config.banks.birthDate6) {
-                birthEl.value = data.config.banks.birthDate6;
-              }
-              if (statusEl && data.config.banks.woori && data.config.banks.woori.queryPassword4) {
-                statusEl.className = 'text-[var(--success)] font-semibold';
-                statusEl.textContent = '✅ 비밀번호 4자리 설정됨 (config/collector_config.json)';
-              }
+      fetch(LOCAL_API_BASE + '/api/config')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data && data.ok && data.config && data.config.banks) {
+            const birthEl = document.getElementById('cfg-woori-birth');
+            const statusEl = document.getElementById('cfg-woori-status');
+            if (birthEl && data.config.banks.birthDate6) {
+              birthEl.value = data.config.banks.birthDate6;
             }
-          })
-          .catch(function() {});
-      }
+            if (statusEl && data.config.banks.woori && data.config.banks.woori.queryPassword4) {
+              statusEl.className = 'text-[var(--success)] font-semibold';
+              statusEl.textContent = '✅ 비밀번호 4자리 설정됨 (config/collector_config.json)';
+            }
+          }
+        })
+        .catch(function() {});
     })();
   </script>
 </body>
