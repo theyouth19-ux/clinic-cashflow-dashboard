@@ -69,18 +69,15 @@
     <div class="flex flex-wrap items-center justify-between gap-2 bg-[var(--card)] border border-[var(--border)] rounded-xl p-3">
       <div class="flex flex-wrap items-center gap-2">
         <span class="px-2.5 py-1 text-xs font-bold rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)]">🚩 공식 기준일: 매월 24일 (23일 경남카드 출금 직후)</span>
-        <span class="px-2 py-0.5 text-xs rounded bg-[var(--secondary)] text-[var(--success)] font-semibold">🛡️ 휴대폰 무설치 · PC 자동수집 모드</span>
+        <span class="px-2 py-0.5 text-xs rounded bg-[var(--secondary)] text-[var(--success)] font-semibold">🔗 팝빌 2계좌 자동연동 (우리 · 경남)</span>
       </div>
 
       <div class="flex flex-wrap items-center gap-1.5">
-        <button type="button" onclick="switchTopPanel('sms')" class="px-2.5 py-1.5 text-xs font-bold rounded-lg bg-[var(--success)] text-black transition hover:opacity-90">
-          🤖 PC 자동수집 로봇
-        </button>
         <button type="button" onclick="switchTopPanel('whatif')" class="px-2.5 py-1.5 text-xs font-bold rounded-lg bg-[var(--warning)] text-black transition hover:opacity-90">
           🧪 시뮬레이터 · ⚙️ 초기값
         </button>
-        <button type="button" onclick="switchTopPanel('cloud')" class="px-2.5 py-1.5 text-xs font-bold rounded-lg bg-[var(--secondary)] text-[var(--secondary-foreground)] transition hover:opacity-90">
-          ☁️ PC ↔ 폴드5 동기화
+        <button type="button" onclick="switchTopPanel('popbill')" class="px-2.5 py-1.5 text-xs font-bold rounded-lg bg-[var(--secondary)] text-[var(--secondary-foreground)] transition hover:opacity-90">
+          🔗 팝빌 · ☁️ 폴드5 연결
         </button>
         <button type="button" id="btn-mode-folded" onclick="setScreenMode('folded')" class="px-2.5 py-1.5 text-xs rounded-lg bg-[var(--secondary)] text-[var(--secondary-foreground)] transition">
           📱 폴드5(접음)
@@ -102,129 +99,99 @@
       </button>
     </div>
 
-    <!-- PANEL 1: 🤖 PC 자동 수집 로봇 & 내역 자동 분류 센터 -->
-    <div id="top-panel-sms" class="bg-[var(--card)] border-2 border-[var(--success)] rounded-xl p-4 space-y-3">
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <div class="flex flex-wrap items-center gap-2">
-            <span class="text-xs font-bold px-2 py-0.5 rounded bg-[var(--success)] text-black">휴대폰 앱 설치 0개 · PC 자동수집</span>
-            <span id="sim-click-count" class="text-xs font-mono text-[var(--muted-foreground)]">수집 반영: 0건</span>
-          </div>
-          <h2 class="text-sm font-bold mt-1">🤖 PC 자동 수집 로봇 제어판 (3개 은행 빠른조회 + 갤럭시아PG 실제분해 + 홈택스 13·14·23일 카드)</h2>
-        </div>
-        <div class="flex gap-1.5 shrink-0">
-          <button type="button" onclick="runFullPcAutoCollectDemo()" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90">
-            🚀 PC 로봇 원클릭 전체 수집 실행
-          </button>
-          <button type="button" onclick="resetDemoData()" class="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-[var(--secondary)] hover:opacity-80">
-            🔄 샘플데이터 복원
-          </button>
-          <button type="button" onclick="switchTopPanel('none')" class="px-2 py-1.5 text-xs text-[var(--muted-foreground)] hover:underline">
-            ▲ 접기
-          </button>
-        </div>
+    <!-- ALWAYS-VISIBLE LIVE 5-CARD SCOREBOARD STRIP -->
+    <div id="live-scoreboard" class="grid grid-cols-2 md:grid-cols-5 gap-2 p-3 rounded-xl bg-[var(--card)] border border-[var(--border)] text-xs">
+      <div id="sb-box-woori" class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+        <div class="text-[var(--muted-foreground)]">🟦 우리 (1005-104-863854)</div>
+        <div id="sb-woori" class="font-mono font-bold text-sm mt-0.5">52,180,000원</div>
       </div>
+      <div id="sb-box-kyongnam" class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+        <div class="text-[var(--muted-foreground)]">🟧 경남 (207-0172-8715-04)</div>
+        <div id="sb-kyongnam" class="font-mono font-bold text-sm mt-0.5">13,440,000원</div>
+      </div>
+      <div id="sb-box-totalbank" class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+        <div class="text-[var(--muted-foreground)]">🏦 2개통장 합계 (우리+경남)</div>
+        <div id="sb-totalbank" class="font-mono font-bold text-sm mt-0.5 text-[var(--primary)]">65,620,000원</div>
+      </div>
+      <div id="sb-box-card" class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+        <div class="text-[var(--muted-foreground)]">💳 13·14·23일 카드누적</div>
+        <div id="sb-card" class="font-mono font-bold text-sm mt-0.5 text-[var(--warning)]">18,640,000원</div>
+      </div>
+      <div id="sb-box-profit" class="p-2.5 rounded-lg col-span-2 md:col-span-1 bg-[var(--background)] border border-[var(--primary)]">
+        <div class="font-semibold">🏆 24일 기준 실질순이익</div>
+        <div id="sb-profit" class="font-mono font-bold text-sm mt-0.5 text-[var(--success)]">+16,166,000원</div>
+      </div>
+    </div>
 
-      <!-- 🟦 우리은행 1005-104-863854 실데이터 전용 전환 & 타계좌 자동제외 바 -->
-      <div class="p-3 rounded-xl bg-[var(--background)] border border-[var(--primary)] space-y-2 text-xs">
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          <div class="flex flex-wrap items-center gap-2">
-            <span class="px-2 py-0.5 rounded bg-[var(--primary)] text-[var(--primary-foreground)] font-bold">🟦 우리은행 지정계좌: 1005-104-863854</span>
-            <span id="real-mode-badge" class="text-[var(--warning)] font-semibold">⚠️ 현재 화면은 테스트용 가상 샘플 금액입니다 (비밀번호 없이 자동조회 불가)</span>
-          </div>
-          <div class="flex flex-wrap gap-1.5">
-            <button type="button" onclick="openWooriFastQuery()" class="px-2.5 py-1 rounded-lg bg-[var(--secondary)] hover:opacity-90 font-semibold">
-              🏦 우리은행 스피드계좌조회 (계좌복사)
-            </button>
-            <button type="button" onclick="sendTestRecord('[우리은행] 1002-999-111111 입금 9,990,000원 타계좌테스트')" class="px-2.5 py-1 rounded-lg bg-[var(--secondary)] hover:opacity-90 font-semibold">
-              🛡️ 타계좌(1002-999-111111) 제외 테스트
-            </button>
-          </div>
-        </div>
+    <div id="sim-toast" class="hidden p-2.5 rounded-xl bg-[var(--secondary)] text-xs font-semibold text-[var(--success)]"></div>
+
+    <!-- PANEL 1: 🔗 팝빌 API 연동 · 실잔액 보정 · 폴드5 구글시트 동기화 (기본 접힘) -->
+    <div id="top-panel-popbill" class="bg-[var(--card)] border-2 border-[var(--primary)] rounded-xl p-4 space-y-4 hidden text-xs">
+      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--card-border)] pb-3">
         <div class="flex flex-wrap items-center gap-2">
-          <label class="text-[var(--muted-foreground)] shrink-0">현재 <b>1005-104-863854</b> 실제 잔액(원):</label>
-          <input id="quick-woori-bal" type="number" step="1000" placeholder="예: 34500000" class="w-44 bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1 font-mono font-bold" />
+          <span class="px-2 py-0.5 rounded bg-[var(--primary)] text-[var(--primary-foreground)] font-bold">팝빌 2계좌 자동수집 + 폴드5 동기화</span>
+          <span id="real-mode-badge" class="text-[var(--warning)] font-semibold">⚠️ 테스트용 가상 샘플</span>
+        </div>
+        <button type="button" onclick="switchTopPanel('none')" class="text-[var(--muted-foreground)] hover:underline">▲ 패널 접기</button>
+      </div>
+
+      <!-- Popbill API Key Form -->
+      <div class="p-3 rounded-xl bg-[var(--background)] border border-[var(--border)] space-y-2.5">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="font-bold text-[var(--primary)]">1. 팝빌 API 키 등록 (이메일로 받은 LinkID / SecretKey 입력)</div>
+          <span id="cfg-pb-status" class="text-[var(--muted-foreground)]">키 발급 대기중</span>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-5 gap-2 items-center">
+          <input id="cfg-pb-corp" type="text" value="4191402489" placeholder="사업자번호 (숫자만)" class="bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 font-mono" />
+          <input id="cfg-pb-linkid" type="text" placeholder="LinkID (예: TESTER...)" class="bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 font-mono" />
+          <input id="cfg-pb-secret" type="password" placeholder="SecretKey" class="bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 font-mono" />
+          <label class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[var(--card)] border border-[var(--border)] cursor-pointer">
+            <input id="cfg-pb-test" type="checkbox" checked class="accent-[var(--primary)]" />
+            <span>테스트(무상) 모드</span>
+          </label>
+          <button type="button" onclick="savePopbillConfig()" class="px-3 py-1.5 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] font-bold">
+            💾 팝빌 키 저장
+          </button>
+        </div>
+        <div class="text-[11px] text-[var(--muted-foreground)]">
+          * 연동 계좌: <b>우리은행 1005-104-863854</b> · <b>경남은행 207-0172-8715-04</b> (API 키는 이 PC의 <code>config/collector_config.json</code>에만 저장됩니다)
+        </div>
+      </div>
+
+      <!-- Quick Woori Balance & Reset -->
+      <div class="p-3 rounded-xl bg-[var(--background)] border border-[var(--border)] flex flex-wrap items-center justify-between gap-2">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="font-bold">🟦 우리 1005-104-863854 실잔액 보정:</span>
+          <input id="quick-woori-bal" type="number" step="1000" placeholder="예: 34500000" class="w-40 bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1 font-mono font-bold" />
           <button type="button" onclick="applyQuickWooriRealBalance()" class="px-3 py-1 rounded-lg bg-[var(--success)] text-black font-bold">
-            ✅ 우리 1005-104-863854 잔액만 즉시 반영
-          </button>
-          <button type="button" onclick="resetToRealWooriOnly()" class="px-3 py-1 rounded-lg bg-[var(--error)] text-white font-bold">
-            🧹 샘플 데이터 모두 0원 초기화 (우리은행 1005-104-863854만 시작)
+            ✅ 실잔액 즉시 반영
           </button>
         </div>
-        <div class="pt-2 border-t border-[var(--border)] flex flex-wrap items-center gap-2">
-          <span class="font-bold text-[var(--primary)]">🔐 [1순서] 스피드계좌조회 자동연동 설정 (내 PC 로컬 파일에만 보관 · 외부전송 안됨):</span>
-          <input id="cfg-woori-birth" type="text" maxlength="12" placeholder="생년월일 6자리 (또는 사업자번호)" class="w-48 bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1 font-mono" />
-          <input id="cfg-woori-pw" type="password" maxlength="4" placeholder="통장 비밀번호 4자리" class="w-36 bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1 font-mono" />
-          <button type="button" onclick="saveWooriStep1Config()" class="px-3 py-1 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] font-bold">
-            💾 내 PC에 안전 저장
+        <div class="flex flex-wrap items-center gap-1.5">
+          <button type="button" onclick="resetToRealWooriOnly()" class="px-2.5 py-1 rounded-lg bg-[var(--error)] text-white font-bold">
+            🧹 0원 초기화
           </button>
-          <span id="cfg-woori-status" class="text-[var(--muted-foreground)]"></span>
+          <button type="button" onclick="resetDemoData()" class="px-2.5 py-1 rounded-lg bg-[var(--secondary)] font-semibold">
+            🔄 샘플 복원
+          </button>
         </div>
       </div>
 
-      <!-- 6개 핵심 수집 항목 원클릭 테스트 버튼 -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2 text-xs">
-        <button type="button" onclick="sendTestRecord('갤럭시아정산,PG정산명세,카드:3600000,네이버페이:580000,카카오페이:320000,미정산:14950000')" class="p-2.5 rounded-lg bg-[var(--secondary)] hover:border-[var(--primary)] border border-[var(--border)] text-left transition active:scale-95">
-          <div class="font-bold text-[var(--success)]">① 🟦 갤럭시아PG 실분해</div>
-          <div class="text-[var(--muted-foreground)] mt-0.5">카드·N페이·카카오 실제값</div>
-        </button>
-        <button type="button" onclick="sendTestRecord('[우리은행] 1005-104-863854 빠른조회 입금 3,200,000원 하나카드 잔액 55,380,000원')" class="p-2.5 rounded-lg bg-[var(--secondary)] hover:border-[var(--primary)] border border-[var(--border)] text-left transition active:scale-95">
-          <div class="font-bold text-[var(--success)]">② 🟦 우리 1005-104-863854</div>
-          <div class="text-[var(--muted-foreground)] mt-0.5">지정계좌 입금·잔액동기화</div>
-        </button>
-        <button type="button" onclick="sendTestRecord('[삼성카드] 승인 1,450,000원 일시불 대웅제약 보톡스재료비')" class="p-2.5 rounded-lg bg-[var(--secondary)] hover:border-[var(--primary)] border border-[var(--border)] text-left transition active:scale-95">
-          <div class="font-bold text-[var(--warning)]">③ 💳 삼성카드 (13일)</div>
-          <div class="text-[var(--muted-foreground)] mt-0.5">13일 출금 바구니 자동합산</div>
-        </button>
-        <button type="button" onclick="sendTestRecord('[신한카드] 1234 승인 850,000원 일시불 네이버파워링크광고')" class="p-2.5 rounded-lg bg-[var(--secondary)] hover:border-[var(--primary)] border border-[var(--border)] text-left transition active:scale-95">
-          <div class="font-bold text-[var(--warning)]">④ 💳 국민·우리·신한·롯데</div>
-          <div class="text-[var(--muted-foreground)] mt-0.5">14일 출금 바구니 자동합산</div>
-        </button>
-        <button type="button" onclick="sendTestRecord('[경남BC] 승인취소 1,850,000원 (주)블루메디칼')" class="p-2.5 rounded-lg bg-[var(--secondary)] hover:border-[var(--primary)] border border-[var(--border)] text-left transition active:scale-95">
-          <div class="font-bold text-[var(--primary)]">⑤ 💳 경남카드 (23일)</div>
-          <div class="text-[var(--muted-foreground)] mt-0.5">23일 출금·승인취소 차감</div>
-        </button>
-        <button type="button" onclick="sendTestRecord('[우리은행] 1005-104-863854 입금 880,000원 원장님현금입금 잔액 53,060,000원')" class="p-2.5 rounded-lg bg-[var(--secondary)] hover:border-[var(--primary)] border border-[var(--border)] text-left transition active:scale-95">
-          <div class="font-bold text-[var(--success)]">⑥ 🟦 우리 현금직접입금</div>
-          <div class="text-[var(--muted-foreground)] mt-0.5">고객현금 우리 직접입금 반영</div>
-        </button>
+      <!-- Fold5 Cloud Sync -->
+      <div class="p-3 rounded-xl bg-[var(--background)] border border-[var(--border)] space-y-2">
+        <div class="font-bold text-[var(--success)]">2. PC ↔ 갤럭시 폴드5 구글 시트 원장 동기화</div>
+        <div class="grid grid-cols-1 sm:grid-cols-5 gap-2">
+          <input id="cloud-webhook-url" type="text" placeholder="구글 시트 웹앱 URL (https://script.google.com/macros/s/.../exec)" class="sm:col-span-2 bg-[var(--card)] border border-[var(--border)] rounded-lg px-3 py-1.5" />
+          <input id="cloud-secret-token" type="password" value="clinic-24" placeholder="비밀 토큰 (기본: clinic-24)" class="bg-[var(--card)] border border-[var(--border)] rounded-lg px-3 py-1.5 font-mono" />
+          <button type="button" onclick="pushStateToCloudWebhook()" class="px-3 py-1.5 rounded-lg bg-[var(--success)] text-black font-bold">
+            ⬆️ 시트에 저장(Push)
+          </button>
+          <button type="button" onclick="syncFromCloudWebhook()" class="px-3 py-1.5 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] font-bold">
+            ⬇️ 시트에서 불러오기
+          </button>
+        </div>
+        <div id="cloud-save-msg" class="hidden font-semibold text-[var(--success)]"></div>
       </div>
-
-      <!-- LIVE SCOREBOARD STRIP -->
-      <div id="live-scoreboard" class="grid grid-cols-2 md:grid-cols-5 gap-2 p-2.5 rounded-xl bg-[var(--background)] border border-[var(--border)] text-xs">
-        <div id="sb-box-woori" class="p-2 rounded-lg">
-          <div class="text-[var(--muted-foreground)]">🟦 우리 (1005-104-863854)</div>
-          <div id="sb-woori" class="font-mono font-bold text-sm mt-0.5">52,180,000원</div>
-        </div>
-        <div id="sb-box-kyongnam" class="p-2 rounded-lg">
-          <div class="text-[var(--muted-foreground)]">🟧 경남 (207-0172-8715-04)</div>
-          <div id="sb-kyongnam" class="font-mono font-bold text-sm mt-0.5">13,440,000원</div>
-        </div>
-        <div id="sb-box-totalbank" class="p-2 rounded-lg">
-          <div class="text-[var(--muted-foreground)]">🏦 2개통장 합계 (우리+경남)</div>
-          <div id="sb-totalbank" class="font-mono font-bold text-sm mt-0.5 text-[var(--primary)]">65,620,000원</div>
-        </div>
-        <div id="sb-box-card" class="p-2 rounded-lg">
-          <div class="text-[var(--muted-foreground)]">💳 13·14·23일 카드누적</div>
-          <div id="sb-card" class="font-mono font-bold text-sm mt-0.5 text-[var(--warning)]">18,640,000원</div>
-        </div>
-        <div id="sb-box-profit" class="p-2 rounded-lg col-span-2 md:col-span-1 border border-[var(--primary)]">
-          <div class="font-semibold">🏆 24일 기준 실질순이익</div>
-          <div id="sb-profit" class="font-mono font-bold text-sm mt-0.5 text-[var(--success)]">+16,166,000원</div>
-        </div>
-      </div>
-
-      <div class="flex flex-col sm:flex-row gap-2">
-        <input id="custom-sms-input" type="text" value="[삼성카드] 승인 1,450,000원 일시불 대웅제약 보톡스재료비" placeholder="빠른조회 텍스트, 갤럭시아 정산내역, 홈택스 카드내역을 넣거나 우측 파일 불러오기를 누르세요" class="flex-1 bg-[var(--background)] border border-[var(--border)] rounded-lg px-3 py-1.5 text-xs" />
-        <button type="button" onclick="sendCustomRecord()" class="px-3.5 py-1.5 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] text-xs font-bold shrink-0">
-          📥 내역 즉시 반영
-        </button>
-        <label class="px-3.5 py-1.5 rounded-lg bg-[var(--secondary)] text-[var(--secondary-foreground)] text-xs font-bold shrink-0 cursor-pointer hover:opacity-90 text-center">
-          📂 파일(CSV/TXT) 자동반영
-          <input type="file" accept=".csv,.txt,.tsv" onchange="handleFileUpload(event)" class="hidden" />
-        </label>
-      </div>
-      <div id="sim-toast" class="hidden p-2.5 rounded-lg bg-[var(--secondary)] text-xs font-semibold text-[var(--success)]"></div>
     </div>
 
     <!-- PANEL 2: 🧪 경영 손익 시뮬레이터 & ⚙️ 초기값 설정 창 -->
@@ -418,51 +385,7 @@
       </div>
     </div>
 
-    <!-- PANEL 3: ☁️ PC 자동수집 로봇 ↔ 구글 시트 단일 원장 ↔ 갤럭시 폴드5 열람 센터 -->
-    <div id="top-panel-cloud" class="bg-[var(--card)] border-2 border-[var(--primary)] rounded-xl p-4 space-y-3 hidden text-xs">
-      <div class="flex items-center justify-between">
-        <div>
-          <span class="px-2 py-0.5 rounded bg-[var(--primary)] text-[var(--primary-foreground)] font-bold">단일 원장(Single Source of Truth) · 휴대폰 앱 설치 불필요</span>
-          <h2 class="text-sm font-bold mt-1">☁️ PC 자동 수집 로봇 ➔ 구글 시트 원장 ➔ PC & 갤럭시 폴드5 동시 열람</h2>
-        </div>
-        <button type="button" onclick="switchTopPanel('none')" class="text-[var(--muted-foreground)] hover:underline">▲ 닫기</button>
-      </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <div class="p-3 rounded-xl bg-[var(--background)] border border-[var(--border)] space-y-1">
-          <div class="font-bold text-[var(--primary)]">1. PC에서 자동 수집 (휴대폰 무설치)</div>
-          <p class="text-[var(--muted-foreground)]">
-            <code>start_dashboard.bat</code>을 실행하면 PC가 우리·하나·경남 빠른조회, 갤럭시아머니트리 PG, 홈택스 카드내역을 수집해 원장을 갱신합니다.
-          </p>
-        </div>
-
-        <div class="p-3 rounded-xl bg-[var(--background)] border border-[var(--border)] space-y-1">
-          <div class="font-bold text-[var(--success)]">2. 구글 시트 단일 원장 자동 업로드</div>
-          <p class="text-[var(--muted-foreground)]">
-            <code>cloud-deploy/google_sheets_webhook.gs</code> 웹앱 URL을 등록해 두면, PC에서 갱신된 전체 숫자가 비밀 토큰(<code>clinic-24</code>)과 함께 구글 시트에 저장됩니다.
-          </p>
-        </div>
-
-        <div class="p-3 rounded-xl bg-[var(--background)] border border-[var(--border)] space-y-1">
-          <div class="font-bold text-[var(--warning)]">3. PC와 폴드5 어디서든 100% 동일한 화면</div>
-          <p class="text-[var(--muted-foreground)]">
-            갤럭시 폴드5에서는 외부 앱 설치 없이 인터넷 주소만 열면 구글 시트에 저장된 최신 원장을 불러와 PC와 똑같은 숫자를 보여줍니다.
-          </p>
-        </div>
-      </div>
-
-      <div class="grid grid-cols-1 sm:grid-cols-5 gap-2 pt-1">
-        <input id="cloud-webhook-url" type="text" placeholder="구글 시트 웹앱 URL (https://script.google.com/macros/s/.../exec)" class="sm:col-span-2 bg-[var(--background)] border border-[var(--border)] rounded-lg px-3 py-1.5" />
-        <input id="cloud-secret-token" type="password" value="clinic-24" placeholder="비밀 토큰 (기본: clinic-24)" class="bg-[var(--background)] border border-[var(--border)] rounded-lg px-3 py-1.5 font-mono" />
-        <button type="button" onclick="pushStateToCloudWebhook()" class="px-3 py-1.5 rounded-lg bg-[var(--success)] text-black font-bold">
-          ⬆️ 현재 원장 시트에 저장(Push)
-        </button>
-        <button type="button" onclick="syncFromCloudWebhook()" class="px-3 py-1.5 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] font-bold">
-          ⬇️ 시트에서 최신 원장 불러오기
-        </button>
-      </div>
-      <div id="cloud-save-msg" class="hidden font-semibold text-[var(--success)]"></div>
-    </div>
 
     <!-- Main Dashboard Wrapper -->
     <div id="dashboard-wrapper" class="space-y-3.5">
@@ -1042,11 +965,11 @@
     }
 
     function switchTopPanel(panel) {
-      const panels = ['whatif', 'sms', 'cloud'];
+      const panels = ['whatif', 'popbill'];
       panels.forEach(function(p) {
         const el = document.getElementById('top-panel-' + p);
         if (!el) return;
-        if (p === panel) {
+        if (p === panel && el.classList.contains('hidden')) {
           el.classList.remove('hidden');
           if (p === 'whatif') syncInputsFromState();
         } else {
@@ -1140,7 +1063,7 @@
           });
 
           testCount += 1;
-          document.getElementById('sim-click-count').textContent = '수집 반영: ' + testCount + '건';
+          const cntEl = document.getElementById('sim-click-count'); if (cntEl) cntEl.textContent = '수집 반영: ' + testCount + '건';
           appState.balances.updatedAt = 'PC로봇 수집 (' + nowTime + ')';
           safeSaveState();
           renderAll(true);
@@ -1174,7 +1097,7 @@
       const signedAmount = isCancel ? -rawAmount : rawAmount;
 
       testCount += 1;
-      document.getElementById('sim-click-count').textContent = '수집 반영: ' + testCount + '건';
+      const cntEl = document.getElementById('sim-click-count'); if (cntEl) cntEl.textContent = '수집 반영: ' + testCount + '건';
 
       const isCardMsg = text.indexOf('승인') !== -1 || (text.indexOf('카드') !== -1 && text.indexOf('입금') === -1 && text.indexOf('출금') === -1);
       if (isCardMsg) {
@@ -1223,7 +1146,7 @@
             toast.textContent = '⏭️ [타계좌 자동 제외] 지정된 우리은행 계좌(' + acctCheck.targetAccount + ')가 아닌 다른 계좌(' + acctCheck.detectedAccount + ') 내역이므로 반영하지 않았습니다.';
             toast.classList.remove('hidden');
             testCount = Math.max(0, testCount - 1);
-            document.getElementById('sim-click-count').textContent = '수집 반영: ' + testCount + '건';
+            const cntEl = document.getElementById('sim-click-count'); if (cntEl) cntEl.textContent = '수집 반영: ' + testCount + '건';
             return 'EXCLUDED_WOORI';
           }
         } else if (bank === 'kyongnam') {
@@ -1233,7 +1156,7 @@
             toast.textContent = '⏭️ [타계좌 자동 제외] 지정된 경남은행 계좌(' + acctCheck.targetAccount + ')가 아닌 다른 계좌(' + acctCheck.detectedAccount + ') 내역이므로 반영하지 않았습니다.';
             toast.classList.remove('hidden');
             testCount = Math.max(0, testCount - 1);
-            document.getElementById('sim-click-count').textContent = '수집 반영: ' + testCount + '건';
+            const cntEl = document.getElementById('sim-click-count'); if (cntEl) cntEl.textContent = '수집 반영: ' + testCount + '건';
             return 'EXCLUDED_WOORI';
           }
         }
@@ -1350,12 +1273,12 @@
     }
 
     function sendTestRecord(text) {
-      document.getElementById('custom-sms-input').value = text;
+      const smsInp = document.getElementById('custom-sms-input'); if (smsInp) smsInp.value = text;
       processRecordText(text);
     }
 
     function sendCustomRecord() {
-      const val = document.getElementById('custom-sms-input').value;
+      const smsInp = document.getElementById('custom-sms-input'); const val = smsInp ? smsInp.value : '';
       processRecordText(val);
     }
 
@@ -1648,11 +1571,13 @@
       document.getElementById('sim-active-banner').classList.add('hidden');
       appState = cloneObj(INITIAL_STATE);
       testCount = 0;
-      document.getElementById('sim-click-count').textContent = '수집 반영: 0건';
+      const cntEl = document.getElementById('sim-click-count');
+      if (cntEl) cntEl.textContent = '수집 반영: 0건';
       applySimPreset(0, 0, 0, 0);
       syncInputsFromState();
       safeSaveState();
-      document.getElementById('sim-toast').classList.add('hidden');
+      const toastEl = document.getElementById('sim-toast');
+      if (toastEl) toastEl.classList.add('hidden');
       renderAll(true);
     }
 
@@ -1695,7 +1620,8 @@
       appState.transactions = [];
 
       testCount = 0;
-      document.getElementById('sim-click-count').textContent = '수집 반영: 0건';
+      const cntEl = document.getElementById('sim-click-count');
+      if (cntEl) cntEl.textContent = '수집 반영: 0건';
       const quickInp = document.getElementById('quick-woori-bal');
       if (quickInp) quickInp.value = '';
       applySimPreset(0, 0, 0, 0);
@@ -1732,56 +1658,45 @@
       toast.classList.remove('hidden');
     }
 
-    function openWooriFastQuery() {
-      const acctNo = '1005104863854';
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(acctNo).catch(function() {});
-      }
-      window.open('https://spib.wooribank.com/pib/Dream?withyou=CMSPD0010', '_blank', 'noopener');
-      const toast = document.getElementById('sim-toast');
-      toast.textContent = '🏦 우리은행 스피드계좌조회(CMSPD0010) 페이지가 열리고 계좌번호(1005104863854)가 복사되었습니다! 조회 후 잔액을 위 칸에 입력하시거나, 내역을 [엑셀/파일]로 data/inbox 폴더에 저장하시면 자동 반영됩니다.';
-      toast.classList.remove('hidden');
-    }
-
-    function saveWooriStep1Config() {
-      const birthEl = document.getElementById('cfg-woori-birth');
-      const pwEl = document.getElementById('cfg-woori-pw');
-      const statusEl = document.getElementById('cfg-woori-status');
+    function savePopbillConfig() {
+      const corpEl = document.getElementById('cfg-pb-corp');
+      const linkEl = document.getElementById('cfg-pb-linkid');
+      const secretEl = document.getElementById('cfg-pb-secret');
+      const testEl = document.getElementById('cfg-pb-test');
+      const statusEl = document.getElementById('cfg-pb-status');
       const toast = document.getElementById('sim-toast');
 
-      const birth = String(birthEl ? birthEl.value : '').replace(/[^0-9]/g, '');
-      const pw = String(pwEl ? pwEl.value : '').replace(/[^0-9]/g, '');
+      const corpNum = String(corpEl ? corpEl.value : '').replace(/[^0-9]/g, '');
+      const linkId = String(linkEl ? linkEl.value : '').trim();
+      const secretKey = String(secretEl ? secretEl.value : '').trim();
+      const isTest = testEl ? Boolean(testEl.checked) : true;
 
-      if (birth.length !== 6 && birth.length !== 10) {
+      if (corpNum.length !== 10) {
         statusEl.className = 'text-[var(--error)] font-bold';
-        statusEl.textContent = '⚠️ 생년월일 6자리 또는 사업자번호 10자리를 입력해 주세요.';
+        statusEl.textContent = '⚠️ 사업자번호 10자리를 입력해 주세요.';
         return;
       }
-      if (pw.length !== 4) {
+      if (!linkId) {
         statusEl.className = 'text-[var(--error)] font-bold';
-        statusEl.textContent = '⚠️ 통장 조회비밀번호 숫자 4자리를 입력해 주세요.';
+        statusEl.textContent = '⚠️ 팝빌 이메일로 받은 LinkID를 입력해 주세요.';
         return;
       }
-
-      try {
-        if (window.localStorage) {
-          window.localStorage.setItem('clinic_woori_step1_meta', JSON.stringify({ birthDate6: birth, savedAt: new Date().toISOString() }));
-        }
-      } catch (e) {}
 
       fetch(LOCAL_API_BASE + '/api/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ wooriStep1: { birthDate6: birth, queryPassword4: pw } })
+        body: JSON.stringify({ popbillConfig: { corpNum, linkId, secretKey, isTest } })
       })
         .then(function(r) { return r.json(); })
         .then(function(data) {
           if (data && data.ok) {
-            pwEl.value = '';
+            if (secretEl) secretEl.value = '';
             statusEl.className = 'text-[var(--success)] font-bold';
-            statusEl.textContent = '✅ config/collector_config.json 파일에 안전하게 저장되었습니다!';
-            toast.textContent = '✅ [1순서 저장 완료] 생년월일/사업자번호 및 비밀번호 4자리가 내 PC 전용 파일(config/collector_config.json)에 저장되었습니다. 이제 "저장했어"라고 말씀해 주세요!';
-            toast.classList.remove('hidden');
+            statusEl.textContent = '✅ 팝빌 키 저장 완료 (' + (isTest ? '테스트 모드' : '운영 모드') + ')';
+            if (toast) {
+              toast.textContent = '✅ 팝빌 API 키가 이 PC의 config/collector_config.json에 안전하게 저장되었습니다!';
+              toast.classList.remove('hidden');
+            }
           } else {
             statusEl.className = 'text-[var(--error)] font-bold';
             statusEl.textContent = '❌ 저장 실패: ' + ((data && data.error) || '서버 확인 필요');
@@ -1789,9 +1704,7 @@
         })
         .catch(function() {
           statusEl.className = 'text-[var(--warning)] font-bold';
-          statusEl.textContent = '⚠️ 브라우저에서 http://127.0.0.1:3080 을 열어 저장하거나 메모장(collector_config.json)에 직접 입력해 주세요.';
-          toast.textContent = '💡 미리보기 창 보안상 직접 저장이 막힌 경우, 방금 PC에 띄워드린 브라우저 창(http://127.0.0.1:3080)이나 메모장에 입력해 주세요!';
-          toast.classList.remove('hidden');
+          statusEl.textContent = '⚠️ http://127.0.0.1:3080 에서 저장해 주세요.';
         });
     }
 
@@ -2124,15 +2037,18 @@
       fetch(LOCAL_API_BASE + '/api/config')
         .then(function(r) { return r.json(); })
         .then(function(data) {
-          if (data && data.ok && data.config && data.config.banks) {
-            const birthEl = document.getElementById('cfg-woori-birth');
-            const statusEl = document.getElementById('cfg-woori-status');
-            if (birthEl && data.config.banks.birthDate6) {
-              birthEl.value = data.config.banks.birthDate6;
-            }
-            if (statusEl && data.config.banks.woori && data.config.banks.woori.queryPassword4) {
+          if (data && data.ok && data.config && data.config.popbill) {
+            const pb = data.config.popbill;
+            const corpEl = document.getElementById('cfg-pb-corp');
+            const linkEl = document.getElementById('cfg-pb-linkid');
+            const testEl = document.getElementById('cfg-pb-test');
+            const statusEl = document.getElementById('cfg-pb-status');
+            if (corpEl && pb.corpNum) corpEl.value = pb.corpNum;
+            if (linkEl && pb.linkId) linkEl.value = pb.linkId;
+            if (testEl) testEl.checked = Boolean(pb.isTest);
+            if (statusEl && pb.linkId && pb.hasSecretKey) {
               statusEl.className = 'text-[var(--success)] font-semibold';
-              statusEl.textContent = '✅ 비밀번호 4자리 설정됨 (config/collector_config.json)';
+              statusEl.textContent = '✅ 팝빌 키 연동됨 (' + (pb.isTest ? '테스트 모드' : '운영 모드') + ')';
             }
           }
         })

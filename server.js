@@ -266,14 +266,42 @@ const server = http.createServer(async (req, res) => {
   // API 5: PC 수집기 설정 조회/저장 (Git 추적 제외 로컬 파일)
   if (req.method === 'GET' && req.url === '/api/config') {
     const cfg = loadConfig();
+    const safeCfg = Object.assign({}, cfg);
+    if (cfg.popbill) {
+      safeCfg.popbill = {
+        enabled: Boolean(cfg.popbill.enabled),
+        isTest: Boolean(cfg.popbill.isTest),
+        corpNum: cfg.popbill.corpNum || '',
+        linkId: cfg.popbill.linkId || '',
+        hasSecretKey: Boolean(cfg.popbill.secretKey)
+      };
+    }
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-    return res.end(JSON.stringify({ ok: true, config: cfg }));
+    return res.end(JSON.stringify({ ok: true, config: safeCfg }));
   }
 
   if (req.method === 'POST' && req.url === '/api/config') {
     try {
       const payload = await readJsonBody(req);
       const cfg = loadConfig();
+      if (payload && payload.popbillConfig) {
+        if (!cfg.popbill) cfg.popbill = { enabled: true, isTest: true };
+        if (payload.popbillConfig.corpNum !== undefined) {
+          cfg.popbill.corpNum = String(payload.popbillConfig.corpNum).replace(/[^0-9]/g, '');
+        }
+        if (payload.popbillConfig.linkId !== undefined && String(payload.popbillConfig.linkId).trim()) {
+          cfg.popbill.linkId = String(payload.popbillConfig.linkId).trim();
+        }
+        if (payload.popbillConfig.secretKey !== undefined && String(payload.popbillConfig.secretKey).trim()) {
+          cfg.popbill.secretKey = String(payload.popbillConfig.secretKey).trim();
+        }
+        if (payload.popbillConfig.isTest !== undefined) {
+          cfg.popbill.isTest = Boolean(payload.popbillConfig.isTest);
+        }
+        saveConfig(cfg);
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        return res.end(JSON.stringify({ ok: true, savedToFile: CONFIG_FILE }));
+      }
       if (payload && payload.wooriStep1) {
         if (!cfg.banks) cfg.banks = {};
         if (!cfg.banks.woori) cfg.banks.woori = { enabled: true, accountNumber: '1005-104-863854', onlyThisAccount: true };
