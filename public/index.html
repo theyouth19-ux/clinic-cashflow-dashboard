@@ -610,6 +610,19 @@
             </div>
           </div>
         </div>
+
+        <!-- Separated YTD (1월~선택월) VAT & Korean Income Tax Card -->
+        <div id="pnl-ytd-tax-card" class="bg-[var(--card)] border-2 border-[var(--primary)] rounded-xl p-4 space-y-2.5">
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--card-border)] pb-2">
+            <h3 id="ytd-tax-title" class="font-bold text-xs text-[var(--primary)]">🇰🇷 1~해당월 누적 부가세 적립 & 국내 세법 예상 종합소득세</h3>
+            <span class="text-[11px] text-[var(--muted-foreground)]">매년 1월 ~ 선택월 누적 기준 (지방소득세 10% 포함)</span>
+          </div>
+          <div id="ytd-tax-body" class="grid grid-cols-1 md:grid-cols-2 gap-2.5 text-xs">
+            <div class="p-3 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--muted-foreground)] md:col-span-2">
+              엑셀 파일을 올리시면 선택하신 월까지의 1~N월 누적 부가세 적립액과 국내 세법 기준 예상 종합소득세가 자동 계산됩니다.
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- TAB 2: 📍 시점 -->
@@ -1469,7 +1482,7 @@
       if (!appState.monthlyData[ym]) {
         appState.monthlyData[ym] = {
           inflowTotals: { pgCard: 0, wirelessCard: 0, cashHana: 0, platformKyongnam: 0, naverPay: 0, kakaoPay: 0 },
-          outflowTotals: { payroll: 0, lease: 0, taxInsRent: 0, taxLumpSum: 0, rent: 0, supplyCard: 0, marketingCard: 0, welfareOtherCard: 0 },
+          outflowTotals: { payroll: 0, lease: 0, taxInsRent: 0, taxLumpSum: 0, vatLumpSum: 0, incLumpSum: 0, rent: 0, supplyCard: 0, marketingCard: 0, welfareOtherCard: 0 },
           cards: {
             card13: { currentMonthSwipes: 0, confirmedNextWithdraw: 0 },
             card14: { currentMonthSwipes: 0, confirmedNextWithdraw: 0 },
@@ -1686,9 +1699,10 @@
           badge = '⚙️ 장비리스료';
           sub = '5일 리스 출금';
         } else if (/부가세|종합소득세|종소세|절반선납/.test(memo)) {
-          bucketTarget = 'outflow.taxLumpSum';
-          badge = /부가세|절반선납/.test(memo) ? '🏦 부가세 납부(일시납)' : '🏦 종합소득세 납부(일시납)';
-          sub = '월 영업경비 제외 (반기·연간 세금정산 반영)';
+          const isVatPay = /부가세|절반선납/.test(memo);
+          bucketTarget = isVatPay ? 'outflow.vatLumpSum' : 'outflow.incLumpSum';
+          badge = isVatPay ? '🏦 부가세 납부(일시납)' : '🏦 종합소득세 납부(일시납)';
+          sub = '월 영업경비 제외 (누적 세금정산 반영)';
         } else if (/국고|서울특징|경기파주시|국민연금|건강보험|고용보험|산재보험|원천세|종소세|부가세|지방세|재산세|유어택스|세금|세무/i.test(combined)) {
           bucketTarget = 'outflow.taxInsRent';
           badge = '🏛️ 세금·4대보험';
@@ -2861,6 +2875,8 @@
 
       const compBody = document.getElementById('monthly-comparison-body');
       const taxSummaryGrid = document.getElementById('korean-tax-summary-grid');
+      const ytdTitleEl = document.getElementById('ytd-tax-title');
+      const ytdBodyEl = document.getElementById('ytd-tax-body');
       if (compBody) {
         const ymKeys = Object.keys(appState.monthlyData || {}).sort();
         if (!ymKeys.length) {
@@ -2868,8 +2884,15 @@
           if (taxSummaryGrid) {
             taxSummaryGrid.innerHTML = '<div class="p-3 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--muted-foreground)] md:col-span-3">엑셀 업로드 시 상반기·하반기·연간 합산 세금이 자동 계산됩니다.</div>';
           }
+          if (ytdBodyEl) {
+            ytdBodyEl.innerHTML = '<div class="p-3 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--muted-foreground)] md:col-span-2">엑셀 파일을 올리시면 선택하신 월까지의 1~N월 누적 부가세 적립액과 국내 세법 기준 예상 종합소득세가 자동 계산됩니다.</div>';
+          }
         } else {
           const vatRate = getTaxRates(appState.settings).vatRate;
+          const activeYm = view.isMonthly ? view.ym : ymKeys[ymKeys.length - 1];
+          const activeYear = activeYm.slice(0, 4);
+          const activeMonthNum = parseInt(activeYm.slice(5, 7), 10) || 12;
+          const ytdStats = { rev: 0, exp: 0, vat: 0, vatPaid: 0, incPaid: 0, lump: 0, months: 0 };
           const periodStats = {
             h1: { label: '📅 상반기 (1~6월)', rev: 0, exp: 0, vat: 0, lump: 0, months: 0 },
             h2: { label: '📅 하반기 (7~12월 누적)', rev: 0, exp: 0, vat: 0, lump: 0, months: 0 },
@@ -2885,7 +2908,9 @@
             const fix = (mOut.payroll || 0) + (mOut.lease || 0) + (mOut.taxInsRent || 0) + (mOut.rent || 0);
             const cardTotal = ((mC.card13 && mC.card13.currentMonthSwipes) || 0) + ((mC.card14 && mC.card14.currentMonthSwipes) || 0) + ((mC.card23 && mC.card23.currentMonthSwipes) || 0);
             const varCost = cardTotal + (mC.scheduledSupplyTransfer20 || 0) + (mOut.marketingCard || 0) + (mOut.welfareOtherCard || 0);
-            const lump = mOut.taxLumpSum || 0;
+            const vatPaid = mOut.vatLumpSum || 0;
+            const incPaid = mOut.incLumpSum || 0;
+            const lump = vatPaid + incPaid + (mOut.taxLumpSum || 0);
             const tc = calcTaxes(rev, fix + varCost, appState.settings);
             const ebW = (mD.endBalances && mD.endBalances.woori !== null) ? mD.endBalances.woori : 0;
             const ebK = (mD.endBalances && mD.endBalances.kyongnam !== null) ? mD.endBalances.kyongnam : 0;
@@ -2893,6 +2918,15 @@
             const netCls = tc.netProfit >= 0 ? 'text-[var(--success)]' : 'text-[var(--error)]';
 
             const mNum = parseInt(ym.slice(5, 7), 10) || 0;
+            if (ym.slice(0, 4) === activeYear && mNum <= activeMonthNum) {
+              ytdStats.rev += rev;
+              ytdStats.exp += (fix + varCost);
+              ytdStats.vat += Math.round(rev * vatRate);
+              ytdStats.vatPaid += vatPaid;
+              ytdStats.incPaid += incPaid;
+              ytdStats.lump += lump;
+              ytdStats.months += 1;
+            }
             const bucketKey = mNum <= 6 ? 'h1' : 'h2';
             [bucketKey, 'yr'].forEach(function(pk) {
               periodStats[pk].rev += rev;
@@ -2913,6 +2947,36 @@
               '<td class="py-1.5 text-[var(--primary)]">' + fmtMan(ebW + ebK) + '</td>' +
             '</tr>';
           }).join('');
+
+          if (ytdTitleEl && ytdBodyEl) {
+            const rangeLbl = activeMonthNum === 1 ? '1월' : ('1~' + activeMonthNum + '월');
+            const ytdPreTax = ytdStats.rev - ytdStats.exp - ytdStats.vat;
+            const ytdKr = calcKoreanIncomeTax(ytdPreTax);
+            const ytdVatRemain = ytdStats.vat - ytdStats.vatPaid;
+            const ytdIncRemain = ytdKr.totalTax - ytdStats.incPaid;
+            ytdTitleEl.textContent = '🇰🇷 ' + activeYear + '년 ' + rangeLbl + ' 누적 부가세 적립 & 국내 세법 예상 종합소득세';
+            ytdBodyEl.innerHTML =
+              '<div class="p-3 rounded-lg bg-[var(--background)] border border-[var(--border)] space-y-1.5">' +
+                '<div class="flex items-center justify-between">' +
+                  '<span class="font-bold text-[var(--warning)]">🧾 ' + rangeLbl + ' 부가세 적립액 (' + (vatRate * 100).toFixed(1) + '%)</span>' +
+                  '<span class="font-mono font-bold text-sm text-[var(--warning)]">' + fmtWon(ytdStats.vat) + '</span>' +
+                '</div>' +
+                '<div class="text-[11px] text-[var(--muted-foreground)] flex justify-between">' +
+                  '<span>' + rangeLbl + ' 총 매출 ' + fmtMan(ytdStats.rev) + '원 기준</span>' +
+                  '<span>기납부 -' + fmtMan(ytdStats.vatPaid) + '원 · 잔여 ' + fmtMan(ytdVatRemain) + '원</span>' +
+                '</div>' +
+              '</div>' +
+              '<div class="p-3 rounded-lg bg-[var(--background)] border border-[var(--primary)] space-y-1.5">' +
+                '<div class="flex items-center justify-between">' +
+                  '<span class="font-bold text-[var(--primary)]">🏛️ ' + rangeLbl + ' 예상 종합소득세 (지방세 포함)</span>' +
+                  '<span class="font-mono font-bold text-sm text-[var(--warning)]">' + fmtWon(ytdKr.totalTax) + ' <span class="text-xs">(' + ytdKr.effectiveRatePct + '%)</span></span>' +
+                '</div>' +
+                '<div class="text-[11px] text-[var(--muted-foreground)] flex justify-between">' +
+                  '<span>총 순이익 ' + fmtMan(ytdPreTax) + '원 기준 (' + ytdKr.topRatePct + '% 구간)</span>' +
+                  '<span>기납부 -' + fmtMan(ytdStats.incPaid) + '원 · 대비 ' + fmtMan(Math.max(0, ytdIncRemain)) + '원</span>' +
+                '</div>' +
+              '</div>';
+          }
 
           if (taxSummaryGrid) {
             taxSummaryGrid.innerHTML = ['h1', 'h2', 'yr'].map(function(pk) {
