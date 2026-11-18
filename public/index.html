@@ -1547,12 +1547,18 @@
       let sub = summary || (bank === 'kyongnam' ? '경남거래' : '우리거래');
       let isUncertain = false;
       let bucketTarget = null;
+      let bucketDelta = inAmt > 0 ? inAmt : outAmt;
 
       if (cancelled) {
         badge = '🔄 대체취소(상계)';
         sub = '이체오류/취소 (매출·지출 제외)';
       } else if (inAmt > 0) {
-        if (/갤럭시아/i.test(combined)) {
+        if (/최해연/.test(desc) || /급여반환|급여오류|오입금반환/.test(memo)) {
+          bucketTarget = 'outflow.payroll';
+          bucketDelta = -inAmt;
+          badge = '🔄 급여오류반환(상계)';
+          sub = '급여 과오납 반환 (매출 제외·급여 상계)';
+        } else if (/갤럭시아/i.test(combined)) {
           bucketTarget = 'inflow.pgCard';
           badge = '🟦 갤럭시아PG';
           sub = bank === 'kyongnam' ? '경남 계좌 PG 정산입금' : 'PG 정산입금';
@@ -1600,6 +1606,9 @@
         } else if (/문혜연/.test(combined) || /생활비|가사|개인|와이프/.test(memo)) {
           badge = '🏠 가사·생활비인출';
           sub = '병원경비 제외 (가족 생활비)';
+        } else if (/재산세|주택/.test(memo)) {
+          badge = '🏠 가사·개인세금';
+          sub = '병원경비 제외 (개인 재산세)';
         } else if (/대신제50호|임대|월세|관리비/i.test(combined)) {
           bucketTarget = 'outflow.rent';
           badge = '🏢 임대료(SC대신)';
@@ -1686,7 +1695,7 @@
         }
       }
 
-      return { badge: badge, sub: sub, txType: txType, isUncertain: isUncertain, bucketTarget: bucketTarget };
+      return { badge: badge, sub: sub, txType: txType, isUncertain: isUncertain, bucketTarget: bucketTarget, bucketDelta: bucketDelta };
     }
 
     function enrichExistingMemoTx(bucket, fp, memo, ctx) {
@@ -1695,17 +1704,19 @@
       if (!existing || existing.memo) return false;
 
       if (existing.bucketTarget) {
-        applyBucketTarget(bucket, existing.bucketTarget, -existing.amount);
+        const prevDelta = typeof existing.bucketDelta === 'number' ? existing.bucketDelta : existing.amount;
+        applyBucketTarget(bucket, existing.bucketTarget, -prevDelta);
       }
       const cls = classifyBankTransaction(ctx);
       if (cls.bucketTarget) {
-        applyBucketTarget(bucket, cls.bucketTarget, existing.amount);
+        applyBucketTarget(bucket, cls.bucketTarget, cls.bucketDelta);
       }
       existing.memo = memo;
       existing.badge = cls.badge;
       existing.sub = cls.sub;
       existing.isUncertain = cls.isUncertain;
       existing.bucketTarget = cls.bucketTarget;
+      existing.bucketDelta = cls.bucketDelta;
       return true;
     }
 
@@ -1863,7 +1874,7 @@
         const shortDt = dtNorm.slice(5, 16).replace(/-/g, '/');
         const cls = classifyBankTransaction(txCtx);
         if (cls.bucketTarget) {
-          applyBucketTarget(bucket, cls.bucketTarget, inAmt > 0 ? inAmt : outAmt);
+          applyBucketTarget(bucket, cls.bucketTarget, cls.bucketDelta);
         }
 
         bucket.transactions.push({
@@ -1876,6 +1887,7 @@
           sub: cls.sub,
           memo: memo,
           bucketTarget: cls.bucketTarget,
+          bucketDelta: cls.bucketDelta,
           amount: inAmt > 0 ? inAmt : outAmt,
           isUncertain: cls.isUncertain
         });
@@ -2057,7 +2069,7 @@
         const shortDt = dtNorm.slice(5, 16).replace(/-/g, '/');
         const cls = classifyBankTransaction(txCtx);
         if (cls.bucketTarget) {
-          applyBucketTarget(bucket, cls.bucketTarget, inAmt > 0 ? inAmt : outAmt);
+          applyBucketTarget(bucket, cls.bucketTarget, cls.bucketDelta);
         }
 
         bucket.transactions.push({
@@ -2070,6 +2082,7 @@
           sub: cls.sub,
           memo: memo,
           bucketTarget: cls.bucketTarget,
+          bucketDelta: cls.bucketDelta,
           amount: inAmt > 0 ? inAmt : outAmt,
           isUncertain: cls.isUncertain
         });
