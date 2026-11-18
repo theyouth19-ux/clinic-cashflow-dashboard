@@ -1956,19 +1956,21 @@
 
       const headerCols = parseCsvLine(headerRaw).map(function(h) { return h.replace(/\s+/g, ''); });
       const findCsvCol = function(patterns, fallbackIdx) {
-        const idx = headerCols.findIndex(function(h) {
-          return patterns.some(function(p) { return h.includes(p); });
-        });
-        return idx !== -1 ? idx : fallbackIdx;
+        for (let pi = 0; pi < patterns.length; pi++) {
+          const idx = headerCols.findIndex(function(h) { return h === patterns[pi] || h.includes(patterns[pi]); });
+          if (idx !== -1) return idx;
+        }
+        return fallbackIdx;
       };
       const colDt = findCsvCol(['거래일시'], 1);
-      const colKind = findCsvCol(['적요', '거래구분'], 2);
-      const colIo = findCsvCol(['입출구분'], -1);
+      const hasDescCol = headerCols.some(function(h) { return h.includes('기재내용') || h.includes('거래내용'); });
+      const colKind = findCsvCol(hasDescCol ? ['거래종류', '거래구분', '적요'] : ['거래종류', '거래구분'], 2);
+      const colIo = findCsvCol(['입출구분', '입지구분'], -1);
       const colOut = findCsvCol(['찾으신금액', '출금금액'], 4);
       const colIn = findCsvCol(['맡기신금액', '입금금액'], 5);
       const colBal = findCsvCol(['거래후잔액', '잔액'], 6);
-      const colDesc = findCsvCol(['기재내용', '거래내용', '내용'], bank === 'woori' ? 3 : 7);
-      const colMemo = findCsvCol(['메모', '거래메모', '비고'], bank === 'woori' ? 8 : 9);
+      const colDesc = findCsvCol(hasDescCol ? ['기재내용', '거래내용'] : ['적요'], bank === 'woori' ? 3 : 7);
+      const colMemo = findCsvCol(['메모내용', '거래메모', '메모', '비고'], bank === 'woori' ? 8 : 9);
 
       if (!appState.settings.realDataMode) {
         resetToRealWooriOnly();
