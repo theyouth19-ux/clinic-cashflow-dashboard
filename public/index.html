@@ -1589,7 +1589,9 @@
           isUncertain = true;
         }
       } else if (outAmt > 0) {
-        const isInternal = (/김대윤/.test(desc) && !/국고|서울특징|KB손보/.test(desc)) || kwList.some(function(kw) { return combined.includes(kw); });
+        const isPayrollMemo = /퇴직금|급여|월급|알바|인건비|상여|성과급|실습비|일함/.test(memo);
+        const isTaxMemo = /세금|소득세|지방세|부가세|원천세|종소세|재산세|세무/.test(memo);
+        const isInternal = !isPayrollMemo && !isTaxMemo && ((/김대윤/.test(desc) && !/국고|서울특징|경기파주시|KB손보/.test(desc)) || kwList.some(function(kw) { return combined.includes(kw); }));
         const dayNum = parseInt(dtNorm.slice(8, 10), 10) || 0;
 
         if (isInternal) {
@@ -1606,10 +1608,10 @@
           bucketTarget = 'outflow.lease';
           badge = '⚙️ 장비리스료';
           sub = '5일 리스 출금';
-        } else if (/국고|서울특징|국민연금|건강보험|고용보험|산재보험|원천세|종소세|부가세|지방세|유어택스|세금|세무/i.test(combined)) {
+        } else if (/국고|서울특징|경기파주시|국민연금|건강보험|고용보험|산재보험|원천세|종소세|부가세|지방세|재산세|유어택스|세금|세무/i.test(combined)) {
           bucketTarget = 'outflow.taxInsRent';
           badge = '🏛️ 세금·4대보험';
-          sub = '10일 세금·4대보험·세무';
+          sub = '세금·4대보험·세무';
         } else if (/삼성카드|우리카드|롯데카드|신한카드|ＫＢ카드|KB카드|현대카드|경남카드|경남비씨카드|하나카드/i.test(combined)) {
           if (/삼성카드/i.test(combined)) bucketTarget = 'cards.card13';
           else if (/경남카드|경남비씨/i.test(combined)) bucketTarget = 'cards.card23';
@@ -1617,7 +1619,11 @@
           badge = '💳 카드대금출금';
           sub = '사업자카드 결제출금';
         } else if (/주식회사 에이티/.test(combined)) {
-          if (/재료|물품/.test(combined) || (!/해외|국내|마케팅|수수료/.test(combined) && atMaxByYm[ym] && outAmt === atMaxByYm[ym])) {
+          if (/EMR/i.test(memo)) {
+            bucketTarget = 'outflow.welfareOtherCard';
+            badge = '🏥 에이티움(EMR)';
+            sub = 'EMR 사용료';
+          } else if (/재료|물품/.test(combined) || (!/해외|외국인|국내|마케팅|수수료/.test(combined) && atMaxByYm[ym] && outAmt === atMaxByYm[ym])) {
             bucketTarget = 'cards.scheduledSupplyTransfer20';
             badge = '💉 에이티움(재료비)';
             sub = '에이티움 본사 재료·물품';
@@ -1626,15 +1632,15 @@
             badge = '📢 에이티움(수수료·마케팅)';
             sub = '해외/국내 수수료·마케팅비';
           }
-        } else if (/씨메디|애브비|오멜론|재료|약품|보톡스|필러|스킨부스터|물품/i.test(combined)) {
+        } else if (/씨메디|애브비|오멜론|재료|약품|보톡스|필러|스킨부스터|골드테라피|마스크팩|물품/i.test(combined)) {
           bucketTarget = 'cards.scheduledSupplyTransfer20';
           badge = '💉 재료·약품이체';
-          sub = '재료/약품 거래처 이체';
+          sub = '재료/약품/장비소모품';
         } else if (/씨유이/.test(combined)) {
           bucketTarget = 'outflow.marketingCard';
           badge = '📢 메이투안(씨유이)';
           sub = '해외마케팅 전달수수료';
-        } else if (/힐링페이퍼|힐링페|언니가이드|강남언니|바비톡|네이버|메타|크리에이트|레드테이블|마케팅|광고|체험단|블로그|인스타|유튜브/i.test(combined)) {
+        } else if (/힐링페이퍼|힐링페|언니가이드|강남언니|바비톡|네이버|메타|크리에이트|레드테이블|한차오|코네스트|메디차이|마케팅|광고|체험단|블로그|인스타|유튜브/i.test(combined)) {
           bucketTarget = 'outflow.marketingCard';
           badge = '📢 마케팅·유치비';
           sub = '마케팅·플랫폼 수수료';
@@ -1660,11 +1666,11 @@
           bucketTarget = 'outflow.payroll';
           badge = '👥 급여(알바원장)';
           sub = '알바원장님 급여';
-        } else if (/급여|월급|알바|인건비|상여|퇴직금|성과급/.test(memo)) {
+        } else if (isPayrollMemo) {
           bucketTarget = 'outflow.payroll';
-          badge = '👥 급여(메모반영)';
-          sub = '메모 확인 급여이체';
-        } else if (/찬솔크린|서울위생|노무사|헤이페이|다우기술|렌탈케어|인텔릭스|KT통신|비즈플레이|대한의사협회|대출이자|한도미사용|KB손보|한국의료분|Npay|수리|비품|청소|렌탈|통신|보험|회식|식대|복리후생/i.test(combined)) {
+          badge = /퇴직금/.test(memo) ? '👥 퇴직금(메모반영)' : '👥 급여(메모반영)';
+          sub = '메모 확인 인건비·퇴직금';
+        } else if (/찬솔크린|서울위생|노무사|헤이페이|다우기술|렌탈케어|인텔릭스|KT통신|비즈플레이|대한의사협회|신용보증기금|대출이자|한도미사용|KB손보|한국의료분|Npay|조모상|경조사|수리|비품|청소|렌탈|통신|보험|회식|식대|복리후생/i.test(combined)) {
           bucketTarget = 'outflow.welfareOtherCard';
           badge = '🏥 병원운영·고정비';
           sub = '청소/위생/대출/렌탈/보험';
@@ -1915,14 +1921,28 @@
       return cols;
     }
 
-    function importKyongnamCsv(csvText) {
+    function importBankCsv(csvText) {
       const lines = String(csvText || '').split(/\r?\n/).map(function(l) { return l.trim(); }).filter(Boolean);
+      const acctMatch = lines.slice(0, 6).join('\n').match(/계좌번호\s*[:：]\s*([0-9-]+)/);
+      const detectedAcct = acctMatch ? acctMatch[1].trim() : '';
+
       const headerIdx = lines.findIndex(function(l) {
-        return l.includes('거래일시') && l.includes('출금금액') && l.includes('입금금액');
+        return l.includes('거래일시') && (l.includes('출금금액') || l.includes('찾으신금액')) && (l.includes('입금금액') || l.includes('맡기신금액'));
       });
       if (headerIdx === -1) return null;
 
-      const headerCols = parseCsvLine(lines[headerIdx]).map(function(h) { return h.replace(/\s+/g, ''); });
+      const headerRaw = lines[headerIdx];
+      let bank = headerRaw.includes('찾으신금액') ? 'woori' : 'kyongnam';
+      if (detectedAcct) {
+        const digits = detectedAcct.replace(/\D/g, '');
+        if (digits === '2070172871504') bank = 'kyongnam';
+        else if (digits === '1005104863854') bank = 'woori';
+        else {
+          return { error: '지정 계좌(우리 1005-104-863854 / 경남 207-0172-8715-04)가 아닌 타 계좌(' + detectedAcct + ') 파일입니다.' };
+        }
+      }
+
+      const headerCols = parseCsvLine(headerRaw).map(function(h) { return h.replace(/\s+/g, ''); });
       const findCsvCol = function(patterns, fallbackIdx) {
         const idx = headerCols.findIndex(function(h) {
           return patterns.some(function(p) { return h.includes(p); });
@@ -1930,13 +1950,13 @@
         return idx !== -1 ? idx : fallbackIdx;
       };
       const colDt = findCsvCol(['거래일시'], 1);
-      const colKind = findCsvCol(['거래구분', '적요'], 2);
-      const colIo = findCsvCol(['입출구분'], 3);
-      const colOut = findCsvCol(['출금금액'], 4);
-      const colIn = findCsvCol(['입금금액'], 5);
+      const colKind = findCsvCol(['적요', '거래구분'], 2);
+      const colIo = findCsvCol(['입출구분'], -1);
+      const colOut = findCsvCol(['찾으신금액', '출금금액'], 4);
+      const colIn = findCsvCol(['맡기신금액', '입금금액'], 5);
       const colBal = findCsvCol(['거래후잔액', '잔액'], 6);
-      const colDesc = findCsvCol(['거래내용', '기재내용', '내용'], 7);
-      const colMemo = findCsvCol(['메모', '거래메모', '비고'], 9);
+      const colDesc = findCsvCol(['기재내용', '거래내용', '내용'], bank === 'woori' ? 3 : 7);
+      const colMemo = findCsvCol(['메모', '거래메모', '비고'], bank === 'woori' ? 8 : 9);
 
       if (!appState.settings.realDataMode) {
         resetToRealWooriOnly();
@@ -1948,41 +1968,80 @@
       let memoUpdatedCount = 0;
       let latestDt = '';
       let latestBal = null;
+      const acctKey = detectedAcct || (bank === 'kyongnam' ? '207-0172-8715-04' : '1005-104-863854');
       const kwList = String(appState.settings.internalKeywords || '집금,내통장,내부,피부과').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
 
+      const parsedRaw = [];
       for (let i = headerIdx + 1; i < lines.length; i++) {
         const cols = parseCsvLine(lines[i]);
-        if (cols.length < 8) continue;
+        if (cols.length < 6) continue;
         if (cols[0] === '합계') continue;
         const dt = cols[colDt] || '';
         if (!/^\d{4}[.\-/]\d{2}[.\-/]\d{2}/.test(dt)) continue;
 
-        const kind = cols[colKind] || '';
-        const ioType = cols[colIo] || '';
+        const summary = (cols[colKind] || '') || (colIo !== -1 ? (cols[colIo] || '') : '');
+        const desc = cols[colDesc] || '';
         const outAmt = parseWonNumber(cols[colOut]);
         const inAmt = parseWonNumber(cols[colIn]);
         const balRaw = String(cols[colBal] || '').trim();
         const bal = balRaw ? parseWonNumber(balRaw) : null;
-        const desc = cols[colDesc] || '';
-        const memo = (cols[colMemo] || '').trim();
+        const memo = colMemo !== -1 ? (cols[colMemo] || '').trim() : '';
 
         if (outAmt === 0 && inAmt === 0 && bal === null) continue;
+        parsedRaw.push({ dtNorm: dt.replace(/\./g, '-'), summary: summary, desc: desc, memo: memo, outAmt: outAmt, inAmt: inAmt, bal: bal, cancelled: false });
+      }
 
-        const dtNorm = dt.replace(/\./g, '-');
+      for (let i = 0; i < parsedRaw.length; i++) {
+        const cur = parsedRaw[i];
+        if (cur.summary.includes('대체취소') && cur.inAmt > 0) {
+          cur.cancelled = true;
+          for (let j = i - 1; j >= Math.max(0, i - 3); j--) {
+            if (!parsedRaw[j].cancelled && parsedRaw[j].outAmt === cur.inAmt && parsedRaw[j].desc === cur.desc) {
+              parsedRaw[j].cancelled = true;
+              break;
+            }
+          }
+          for (let j = i + 1; j <= Math.min(parsedRaw.length - 1, i + 3); j++) {
+            if (!parsedRaw[j].cancelled && parsedRaw[j].outAmt === cur.inAmt && parsedRaw[j].desc === cur.desc) {
+              parsedRaw[j].cancelled = true;
+              break;
+            }
+          }
+        }
+      }
+
+      const atMaxByYm = {};
+      parsedRaw.forEach(function(r) {
+        if (!r.cancelled && r.outAmt > 0 && /주식회사 에이티/.test(r.desc)) {
+          const rYm = r.dtNorm.slice(0, 7);
+          if (!atMaxByYm[rYm] || r.outAmt > atMaxByYm[rYm]) {
+            atMaxByYm[rYm] = r.outAmt;
+          }
+        }
+      });
+
+      parsedRaw.forEach(function(row) {
+        const dtNorm = row.dtNorm;
         const ym = dtNorm.slice(0, 7);
         const bucket = ensureMonthlyBucket(ym);
+        const summary = row.summary;
+        const desc = row.desc;
+        const memo = row.memo;
+        const outAmt = row.outAmt;
+        const inAmt = row.inAmt;
+        const bal = row.bal;
 
         if (bal !== null && dtNorm >= latestDt) {
           latestDt = dtNorm;
           latestBal = bal;
         }
-        if (bal !== null && dtNorm >= (bucket.latestDt.kyongnam || '')) {
-          bucket.latestDt.kyongnam = dtNorm;
-          bucket.endBalances.kyongnam = bal;
+        if (bal !== null && dtNorm >= (bucket.latestDt[bank] || '')) {
+          bucket.latestDt[bank] = dtNorm;
+          bucket.endBalances[bank] = bal;
         }
 
-        const fp = 'kyongnam|207-0172-8715-04|' + dtNorm + '|' + outAmt + '|' + inAmt + '|' + (bal !== null ? bal : '') + '|' + kind + '|' + desc;
-        const txCtx = { bank: 'kyongnam', dtNorm: dtNorm, ym: ym, summary: kind || ioType, desc: desc, memo: memo, outAmt: outAmt, inAmt: inAmt, kwList: kwList, atMaxByYm: {}, cancelled: false };
+        const fp = bank + '|' + acctKey + '|' + dtNorm + '|' + outAmt + '|' + inAmt + '|' + (bal !== null ? bal : '') + '|' + summary + '|' + desc;
+        const txCtx = { bank: bank, dtNorm: dtNorm, ym: ym, summary: summary, desc: desc, memo: memo, outAmt: outAmt, inAmt: inAmt, kwList: kwList, atMaxByYm: atMaxByYm, cancelled: row.cancelled };
 
         if (appState.processedIds.indexOf(fp) !== -1) {
           if (enrichExistingMemoTx(bucket, fp, memo, txCtx)) {
@@ -1990,10 +2049,10 @@
           } else {
             dupCount += 1;
           }
-          continue;
+          return;
         }
         appState.processedIds.push(fp);
-        if (outAmt === 0 && inAmt === 0) continue;
+        if (outAmt === 0 && inAmt === 0) return;
 
         const shortDt = dtNorm.slice(5, 16).replace(/-/g, '/');
         const cls = classifyBankTransaction(txCtx);
@@ -2007,7 +2066,7 @@
           sortDt: dtNorm,
           type: cls.txType,
           badge: cls.badge,
-          title: maskCustomerName(desc || kind || '경남거래'),
+          title: maskCustomerName(desc || summary || (bank === 'kyongnam' ? '경남거래' : '우리거래')),
           sub: cls.sub,
           memo: memo,
           bucketTarget: cls.bucketTarget,
@@ -2015,19 +2074,23 @@
           isUncertain: cls.isUncertain
         });
         addedCount += 1;
-      }
+      });
 
       syncLatestMonthToTopLevel();
       syncMonthSelectOptions();
       if (latestBal !== null) {
-        appState.balances.updatedAt = '경남 ' + latestDt.slice(5, 16) + ' 엑셀반영';
+        appState.balances.updatedAt = (bank === 'kyongnam' ? '경남 ' : '우리 ') + latestDt.slice(5, 16) + ' 엑셀반영';
       }
 
       syncInputsFromState();
       safeSaveState();
       renderAll(true);
-      flashBox('sb-box-kyongnam');
-      return { addedCount: addedCount, dupCount: dupCount, memoUpdatedCount: memoUpdatedCount, latestBal: latestBal, bank: 'kyongnam' };
+      flashBox(bank === 'kyongnam' ? 'sb-box-kyongnam' : 'sb-box-woori');
+      return { addedCount: addedCount, dupCount: dupCount, memoUpdatedCount: memoUpdatedCount, latestBal: latestBal, bank: bank };
+    }
+
+    function importKyongnamCsv(csvText) {
+      return importBankCsv(csvText);
     }
 
     function handleFileUpload(event, expectedBank) {
@@ -2057,13 +2120,12 @@
               }
               return resolve();
             }
-            if (text.includes('거래일시') && text.includes('출금금액') && text.includes('입금금액')) {
-              if (expectedBank === 'woori') {
-                errors.push(file.name + ': 경남은행 양식 파일입니다. [🟧 경남은행 엑셀 올리기] 버튼을 이용해 주세요');
-                return resolve();
-              }
-              const res = importKyongnamCsv(text);
-              if (res) {
+            if (text.includes('거래일시') && (text.includes('출금금액') || text.includes('찾으신금액')) && (text.includes('입금금액') || text.includes('맡기신금액'))) {
+              const res = importBankCsv(text);
+              if (res && res.error) errors.push(file.name + ': ' + res.error);
+              else if (res && expectedBank && res.bank !== expectedBank) {
+                errors.push(file.name + ': 선택한 버튼과 다른 은행(' + (res.bank === 'woori' ? '우리은행' : '경남은행') + ') 파일입니다');
+              } else if (res) {
                 totalAdded += res.addedCount;
                 totalDup += res.dupCount;
                 totalMemoUpdated += (res.memoUpdatedCount || 0);
