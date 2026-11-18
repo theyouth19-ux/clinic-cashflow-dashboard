@@ -595,6 +595,13 @@
               <span id="row-pnl-net" class="font-mono text-sm text-[var(--success)] shrink-0">+16,166,000원</span>
             </div>
           </div>
+          <div class="mt-2 p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)] flex items-center justify-between gap-2 text-xs">
+            <div class="truncate">
+              <span class="font-semibold text-[var(--warning)]">🏦 해당달 부가세·종소세 납부(선납 포함)</span>
+              <span id="row-pnl-taxlumpsum-sub" class="text-[var(--muted-foreground)] ml-1">(영업경비 제외 · 별도 정산)</span>
+            </div>
+            <span id="row-pnl-taxlumpsum" class="font-mono font-bold text-[var(--warning)] shrink-0">0원</span>
+          </div>
         </div>
 
         <!-- Separated YTD (1월~선택월) VAT & Korean Income Tax Card -->
@@ -2755,6 +2762,23 @@
         document.getElementById('row-pnl-supplycash').textContent = '-' + fmtWon(cashSupply20);
         document.getElementById('row-pnl-card23').textContent = '-' + fmtWon(card23Swipes);
         document.getElementById('row-pnl-net').textContent = (netProfitCur >= 0 ? '+' : '') + fmtWon(netProfitCur);
+
+        const mVatH1 = vOut.vatH1Settle || 0;
+        const mVatAdv = vOut.vatLumpSum || 0;
+        const mIncPrev = vOut.incPrevYear || 0;
+        const mIncAdv = vOut.incAdvance || 0;
+        const mIncOther = vOut.incLumpSum || 0;
+        const mLumpTotal = mVatH1 + mVatAdv + mIncPrev + mIncAdv + mIncOther + (vOut.taxLumpSum || 0);
+        const lumpParts = [];
+        if (mVatH1 > 0) lumpParts.push('부가세 확정 ' + fmtMan(mVatH1));
+        if (mVatAdv > 0) lumpParts.push('부가세 선납 ' + fmtMan(mVatAdv));
+        if (mIncPrev > 0) lumpParts.push('종소세 ' + fmtMan(mIncPrev));
+        if (mIncAdv > 0) lumpParts.push('종소세 선납 ' + fmtMan(mIncAdv));
+        if (mIncOther > 0) lumpParts.push('종소세 ' + fmtMan(mIncOther));
+        const lumpEl = document.getElementById('row-pnl-taxlumpsum');
+        const lumpSubEl = document.getElementById('row-pnl-taxlumpsum-sub');
+        if (lumpEl) lumpEl.textContent = mLumpTotal > 0 ? ('-' + fmtWon(mLumpTotal)) : '0원';
+        if (lumpSubEl) lumpSubEl.textContent = lumpParts.length ? ('(' + lumpParts.join(' · ') + ' · 영업경비 제외)') : '(해당달 납부 없음 · 영업경비 제외)';
       } else if (selectedMonth === 'prev1') {
         if (appState.settings && appState.settings.realDataMode) {
           document.getElementById('pnl-title-badge').textContent = '전월 귀속 (아직 마감 스냅샷 데이터 없음)';
