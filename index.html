@@ -1614,7 +1614,10 @@
         badge = '🔄 대체취소(상계)';
         sub = '이체오류/취소 (매출·지출 제외)';
       } else if (inAmt > 0) {
-        if (/최해연/.test(desc) || /급여반환|급여오류|오입금반환/.test(memo)) {
+        if (inAmt === 1) {
+          badge = '🔄 계좌인증(1원)';
+          sub = '카드·간편결제 계좌인증 입금 (매출 제외)';
+        } else if (/최해연/.test(desc) || /급여반환|급여오류|오입금반환/.test(memo)) {
           bucketTarget = 'outflow.payroll';
           bucketDelta = -inAmt;
           badge = '🔄 급여오류반환(상계)';
@@ -1644,7 +1647,7 @@
           bucketTarget = 'inflow.cashHana';
           badge = '💵 현금입금';
           sub = '원장님 직접 현금입금';
-        } else if (/제로페이|비씨카드|캐시백|환불/i.test(combined) || /^(KB|하나|NH|현대|BC|신한|우|삼성|롯데)/i.test(desc) || /^\d{4}\s*(신한|삼성|현대|국민|하나|우리|롯데)/.test(combined)) {
+        } else if (/제로페이|비씨카드|캐시백|캐쉬백|후불교통|환불/i.test(combined) || /^(KB|하나|NH|현대|BC|신한|우|삼성|롯데)/i.test(desc) || /^\d{4}\s*(신한|삼성|현대|국민|하나|우리|롯데)/.test(combined)) {
           bucketTarget = 'inflow.wirelessCard';
           badge = bank === 'kyongnam' ? '💳 제로페이·카드정산' : '💳 단말기·카드정산';
           sub = '카드사 정산·캐시백';
@@ -1755,7 +1758,7 @@
           bucketTarget = 'outflow.payroll';
           badge = /퇴직금/.test(memo) ? '👥 퇴직금(메모반영)' : '👥 급여(메모반영)';
           sub = '메모 확인 인건비·퇴직금';
-        } else if (/찬솔크린|서울위생|노무사|헤이페이|다우기술|렌탈케어|인텔릭스|KT통신|비즈플레이|대한의사협회|신용보증기금|대출이자|한도미사용|KB손보|한국의료분|Npay|조모상|경조사|수리|비품|청소|렌탈|통신|보험|회식|식대|복리후생/i.test(combined)) {
+        } else if (/찬솔크린|서울위생|노무사|헤이페이|다우기술|렌탈케어|인텔릭스|KT통신|비즈플레이|대한의사협회|신용보증기금|대출이자|한도미사용|KB손보|한국의료분|Npay|국민유픽|명찰|조모상|경조사|수리|비품|청소|렌탈|통신|보험|회식|식대|복리후생/i.test(combined)) {
           bucketTarget = 'outflow.welfareOtherCard';
           badge = '🏥 병원운영·고정비';
           sub = '청소/위생/대출/렌탈/보험';
