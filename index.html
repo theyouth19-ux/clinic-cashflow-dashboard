@@ -1509,6 +1509,200 @@
       }
     }
 
+    function applyBucketTarget(bucket, target, delta) {
+      if (!bucket || !target || !delta) return;
+      const parts = String(target).split('.');
+      const group = parts[0];
+      const key = parts[1];
+      if (!group || !key) return;
+      if (group === 'inflow' && bucket.inflowTotals && typeof bucket.inflowTotals[key] === 'number') {
+        bucket.inflowTotals[key] = Math.max(0, bucket.inflowTotals[key] + delta);
+      } else if (group === 'outflow' && bucket.outflowTotals && typeof bucket.outflowTotals[key] === 'number') {
+        bucket.outflowTotals[key] = Math.max(0, bucket.outflowTotals[key] + delta);
+      } else if (group === 'cards' && bucket.cards) {
+        if (key === 'scheduledSupplyTransfer20') {
+          bucket.cards.scheduledSupplyTransfer20 = Math.max(0, (bucket.cards.scheduledSupplyTransfer20 || 0) + delta);
+        } else if (bucket.cards[key]) {
+          bucket.cards[key].currentMonthSwipes = Math.max(0, (bucket.cards[key].currentMonthSwipes || 0) + delta);
+        }
+      }
+    }
+
+    function classifyBankTransaction(ctx) {
+      const bank = ctx.bank;
+      const dtNorm = ctx.dtNorm;
+      const ym = ctx.ym;
+      const summary = ctx.summary || '';
+      const desc = ctx.desc || '';
+      const memo = ctx.memo || '';
+      const outAmt = ctx.outAmt || 0;
+      const inAmt = ctx.inAmt || 0;
+      const kwList = ctx.kwList || [];
+      const atMaxByYm = ctx.atMaxByYm || {};
+      const cancelled = Boolean(ctx.cancelled);
+
+      const combined = (summary + ' ' + desc + ' ' + memo).trim();
+      let badge = bank === 'kyongnam' ? '🟧 경남' : '🟦 우리';
+      let txType = inAmt > 0 ? 'BANK_IN' : 'BANK_OUT';
+      let sub = summary || (bank === 'kyongnam' ? '경남거래' : '우리거래');
+      let isUncertain = false;
+      let bucketTarget = null;
+
+      if (cancelled) {
+        badge = '🔄 대체취소(상계)';
+        sub = '이체오류/취소 (매출·지출 제외)';
+      } else if (inAmt > 0) {
+        if (/갤럭시아/i.test(combined)) {
+          bucketTarget = 'inflow.pgCard';
+          badge = '🟦 갤럭시아PG';
+          sub = bank === 'kyongnam' ? '경남 계좌 PG 정산입금' : 'PG 정산입금';
+        } else if (/위챗|알리|KSNET|ＫＳＮＥＴ/i.test(combined)) {
+          bucketTarget = 'inflow.pgCard';
+          badge = '🟦 간편결제PG';
+          sub = '위챗/알리(KSNET) 정산';
+        } else if (/힐링페이퍼|강남언니|여신티켓|바비톡|언니가이드/i.test(combined)) {
+          bucketTarget = 'inflow.platformKyongnam';
+          badge = /힐링|강남언니/.test(combined) ? '🟧 강남언니' : '🟧 여신티켓';
+          sub = '플랫폼 정산입금';
+        } else if (bank === 'kyongnam' && /김대윤/.test(desc) && !/현금|시재/.test(memo)) {
+          badge = '🔄 내부/본인이체';
+          sub = '원장님 계좌간 이동 (매출 제외)';
+        } else if (/내부|집금|계좌이동/.test(memo)) {
+          badge = '🔄 내부/본인이체';
+          sub = '내부 계좌 이동 (매출 제외)';
+        } else if (/김대윤|유픽의원/.test(combined) || /현금|시재|직접입금/.test(memo)) {
+          bucketTarget = 'inflow.cashHana';
+          badge = '💵 현금입금';
+          sub = '원장님 직접 현금입금';
+        } else if (/제로페이|비씨카드|캐시백|환불/i.test(combined) || /^(KB|하나|NH|현대|BC|신한|우|삼성|롯데)/i.test(desc) || /^\d{4}\s*(신한|삼성|현대|국민|하나|우리|롯데)/.test(combined)) {
+          bucketTarget = 'inflow.wirelessCard';
+          badge = bank === 'kyongnam' ? '💳 제로페이·카드정산' : '💳 단말기·카드정산';
+          sub = '카드사 정산·캐시백';
+        } else if (/고용노동부|K-패스|결산이자|의료배상공제조합|JIN YINSHI/i.test(combined) || /환급|지원금|이자/.test(memo)) {
+          bucketTarget = 'inflow.cashHana';
+          badge = '🟦 지원금·환급·이자';
+          sub = '정부지원/환급/이자수입';
+        } else {
+          bucketTarget = bank === 'kyongnam' ? 'inflow.platformKyongnam' : 'inflow.pgCard';
+          badge = bank === 'kyongnam' ? '🤔 경남기타입금' : '🤔 기타입금(확인)';
+          sub = '확인 필요 (미분류 입금)';
+          isUncertain = true;
+        }
+      } else if (outAmt > 0) {
+        const isInternal = (/김대윤/.test(desc) && !/국고|서울특징|KB손보/.test(desc)) || kwList.some(function(kw) { return combined.includes(kw); });
+        const dayNum = parseInt(dtNorm.slice(8, 10), 10) || 0;
+
+        if (isInternal) {
+          badge = '🔄 내부/본인이체';
+          sub = '경비 제외 (본인·내부이체)';
+        } else if (/문혜연/.test(combined) || /생활비|가사|개인|와이프/.test(memo)) {
+          badge = '🏠 가사·생활비인출';
+          sub = '병원경비 제외 (가족 생활비)';
+        } else if (/대신제50호|임대|월세|관리비/i.test(combined)) {
+          bucketTarget = 'outflow.rent';
+          badge = '🏢 임대료(SC대신)';
+          sub = '25일경 건물 임대료 이체';
+        } else if (/오릭스|캐피탈|ＢＮＫ캐피탈|BNK캐피탈|리스/i.test(combined)) {
+          bucketTarget = 'outflow.lease';
+          badge = '⚙️ 장비리스료';
+          sub = '5일 리스 출금';
+        } else if (/국고|서울특징|국민연금|건강보험|고용보험|산재보험|원천세|종소세|부가세|지방세|유어택스|세금|세무/i.test(combined)) {
+          bucketTarget = 'outflow.taxInsRent';
+          badge = '🏛️ 세금·4대보험';
+          sub = '10일 세금·4대보험·세무';
+        } else if (/삼성카드|우리카드|롯데카드|신한카드|ＫＢ카드|KB카드|현대카드|경남카드|경남비씨카드|하나카드/i.test(combined)) {
+          if (/삼성카드/i.test(combined)) bucketTarget = 'cards.card13';
+          else if (/경남카드|경남비씨/i.test(combined)) bucketTarget = 'cards.card23';
+          else bucketTarget = 'cards.card14';
+          badge = '💳 카드대금출금';
+          sub = '사업자카드 결제출금';
+        } else if (/주식회사 에이티/.test(combined)) {
+          if (/재료|물품/.test(combined) || (!/해외|국내|마케팅|수수료/.test(combined) && atMaxByYm[ym] && outAmt === atMaxByYm[ym])) {
+            bucketTarget = 'cards.scheduledSupplyTransfer20';
+            badge = '💉 에이티움(재료비)';
+            sub = '에이티움 본사 재료·물품';
+          } else {
+            bucketTarget = 'outflow.marketingCard';
+            badge = '📢 에이티움(수수료·마케팅)';
+            sub = '해외/국내 수수료·마케팅비';
+          }
+        } else if (/씨메디|애브비|오멜론|재료|약품|보톡스|필러|스킨부스터|물품/i.test(combined)) {
+          bucketTarget = 'cards.scheduledSupplyTransfer20';
+          badge = '💉 재료·약품이체';
+          sub = '재료/약품 거래처 이체';
+        } else if (/씨유이/.test(combined)) {
+          bucketTarget = 'outflow.marketingCard';
+          badge = '📢 메이투안(씨유이)';
+          sub = '해외마케팅 전달수수료';
+        } else if (/힐링페이퍼|힐링페|언니가이드|강남언니|바비톡|네이버|메타|크리에이트|레드테이블|마케팅|광고|체험단|블로그|인스타|유튜브/i.test(combined)) {
+          bucketTarget = 'outflow.marketingCard';
+          badge = '📢 마케팅·유치비';
+          sub = '마케팅·플랫폼 수수료';
+        } else if (/글로벌텍스프리/i.test(combined)) {
+          bucketTarget = 'outflow.welfareOtherCard';
+          badge = '🌐 택스리펀정산';
+          sub = '글로벌텍스프리 정산출금';
+        } else if (/제이앤씨|무전기/.test(combined)) {
+          bucketTarget = 'outflow.welfareOtherCard';
+          badge = '📻 무전기·소모품';
+          sub = '제이앤씨 수리/소모품비';
+        } else if (/박득남/.test(desc)) {
+          if (outAmt >= 500000 || /급여|월급|원장/.test(memo)) {
+            bucketTarget = 'outflow.payroll';
+            badge = '👥 급여(부원장님)';
+            sub = '박득남 부원장님 급여';
+          } else {
+            bucketTarget = 'outflow.welfareOtherCard';
+            badge = '🏥 원내 소액정산';
+            sub = '부원장님 소액 정산/경비';
+          }
+        } else if (/이유준|신현호|HONG SEU/i.test(desc)) {
+          bucketTarget = 'outflow.payroll';
+          badge = '👥 급여(알바원장)';
+          sub = '알바원장님 급여';
+        } else if (/급여|월급|알바|인건비|상여|퇴직금|성과급/.test(memo)) {
+          bucketTarget = 'outflow.payroll';
+          badge = '👥 급여(메모반영)';
+          sub = '메모 확인 급여이체';
+        } else if (/찬솔크린|서울위생|노무사|헤이페이|다우기술|렌탈케어|인텔릭스|KT통신|비즈플레이|대한의사협회|대출이자|한도미사용|KB손보|한국의료분|Npay|수리|비품|청소|렌탈|통신|보험|회식|식대|복리후생/i.test(combined)) {
+          bucketTarget = 'outflow.welfareOtherCard';
+          badge = '🏥 병원운영·고정비';
+          sub = '청소/위생/대출/렌탈/보험';
+        } else if ((dayNum >= 4 && dayNum <= 6 && (/모바일/.test(summary) || (bank === 'kyongnam' && outAmt >= 500000))) || (/^(하나|신한|국민|우리|토뱅|카카|농협)[가-힣A-Z\s]{2,15}$/.test(desc) && outAmt >= 150000)) {
+          bucketTarget = 'outflow.payroll';
+          badge = '👥 급여';
+          sub = '5일 직원 급여이체';
+        } else {
+          bucketTarget = 'outflow.welfareOtherCard';
+          badge = bank === 'kyongnam' ? '🤔 경남출금(확인)' : '🤔 운영·기타(확인)';
+          sub = '확인 필요 (미분류 지출)';
+          isUncertain = true;
+        }
+      }
+
+      return { badge: badge, sub: sub, txType: txType, isUncertain: isUncertain, bucketTarget: bucketTarget };
+    }
+
+    function enrichExistingMemoTx(bucket, fp, memo, ctx) {
+      if (!memo || !bucket || !Array.isArray(bucket.transactions)) return false;
+      const existing = bucket.transactions.find(function(t) { return t.id === fp; });
+      if (!existing || existing.memo) return false;
+
+      if (existing.bucketTarget) {
+        applyBucketTarget(bucket, existing.bucketTarget, -existing.amount);
+      }
+      const cls = classifyBankTransaction(ctx);
+      if (cls.bucketTarget) {
+        applyBucketTarget(bucket, cls.bucketTarget, existing.amount);
+      }
+      existing.memo = memo;
+      existing.badge = cls.badge;
+      existing.sub = cls.sub;
+      existing.isUncertain = cls.isUncertain;
+      existing.bucketTarget = cls.bucketTarget;
+      return true;
+    }
+
     function importBankHtmlTable(htmlText) {
       const parser = new DOMParser();
       const doc = parser.parseFromString(htmlText, 'text/html');
@@ -1530,18 +1724,38 @@
 
       const tables = Array.from(doc.querySelectorAll('table'));
       let targetRows = [];
+      let headerIdx = -1;
       for (let i = 0; i < tables.length; i++) {
         const rows = Array.from(tables[i].querySelectorAll('tr'));
-        const hasHeader = rows.some(function(r) {
+        const hIdx = rows.findIndex(function(r) {
           const t = r.textContent || '';
-          return t.includes('거래일시') && (t.includes('찾으신금액') || t.includes('출금')) && (t.includes('맡기신금액') || t.includes('입금'));
+          return (t.includes('거래일시') || t.includes('거래일자')) && (t.includes('찾으신금액') || t.includes('출금')) && (t.includes('맡기신금액') || t.includes('입금'));
         });
-        if (hasHeader) {
+        if (hIdx !== -1) {
           targetRows = rows;
+          headerIdx = hIdx;
           break;
         }
       }
       if (!targetRows.length) return null;
+
+      const headerCells = Array.from(targetRows[headerIdx].querySelectorAll('th, td')).map(function(el) {
+        return (el.textContent || '').replace(/\s+/g, '');
+      });
+      const findCol = function(patterns, fallbackIdx) {
+        const idx = headerCells.findIndex(function(h) {
+          return patterns.some(function(p) { return h.includes(p); });
+        });
+        return idx !== -1 ? idx : fallbackIdx;
+      };
+      const colDt = findCol(['거래일시', '거래일자'], 0);
+      const colTime = findCol(['거래시간'], -1);
+      const colSummary = findCol(['적요', '거래구분'], 1);
+      const colDesc = findCol(['기재내용', '거래내용', '받는분', '보내는분'], 2);
+      const colOut = findCol(['찾으신금액', '출금금액', '출금'], 3);
+      const colIn = findCol(['맡기신금액', '입금금액', '입금'], 4);
+      const colBal = findCol(['거래후잔액', '잔액'], 5);
+      const colMemo = findCol(['메모', '거래메모', '비고'], -1);
 
       if (!appState.settings.realDataMode) {
         resetToRealWooriOnly();
@@ -1550,26 +1764,31 @@
 
       let addedCount = 0;
       let dupCount = 0;
+      let memoUpdatedCount = 0;
       let latestDt = '';
       let latestBal = null;
       const acctKey = detectedAcct || (bank === 'kyongnam' ? '207-0172-8715-04' : '1005-104-863854');
       const kwList = String(appState.settings.internalKeywords || '집금,내통장,내부,피부과').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
 
       const parsedRaw = [];
-      targetRows.forEach(function(tr) {
+      targetRows.slice(headerIdx + 1).forEach(function(tr) {
         const cells = Array.from(tr.querySelectorAll('td')).map(function(td) { return (td.textContent || '').trim(); });
-        if (cells.length < 6) return;
-        const dt = cells[0];
+        if (cells.length < 5) return;
+        let dt = cells[colDt] || '';
         if (!/^\d{4}[.\-/]\d{2}[.\-/]\d{2}/.test(dt)) return;
+        if (colTime !== -1 && cells[colTime] && dt.length <= 10) {
+          dt = dt + ' ' + cells[colTime];
+        }
         const dtNorm = dt.replace(/\./g, '-');
-        const summary = cells[1] || '';
-        const desc = cells[2] || '';
-        const outAmt = parseWonNumber(cells[3]);
-        const inAmt = parseWonNumber(cells[4]);
-        const balRaw = String(cells[5] || '').trim();
+        const summary = cells[colSummary] || '';
+        const desc = cells[colDesc] || '';
+        const outAmt = parseWonNumber(cells[colOut]);
+        const inAmt = parseWonNumber(cells[colIn]);
+        const balRaw = String(cells[colBal] || '').trim();
         const bal = balRaw ? parseWonNumber(balRaw) : null;
+        const memo = colMemo !== -1 ? (cells[colMemo] || '').trim() : '';
         if (outAmt === 0 && inAmt === 0 && bal === null) return;
-        parsedRaw.push({ dtNorm: dtNorm, summary: summary, desc: desc, outAmt: outAmt, inAmt: inAmt, bal: bal, cancelled: false });
+        parsedRaw.push({ dtNorm: dtNorm, summary: summary, desc: desc, memo: memo, outAmt: outAmt, inAmt: inAmt, bal: bal, cancelled: false });
       });
 
       for (let i = 0; i < parsedRaw.length; i++) {
@@ -1607,6 +1826,7 @@
         const bucket = ensureMonthlyBucket(ym);
         const summary = row.summary;
         const desc = row.desc;
+        const memo = row.memo;
         const outAmt = row.outAmt;
         const inAmt = row.inAmt;
         const bal = row.bal;
@@ -1615,151 +1835,43 @@
           latestDt = dtNorm;
           latestBal = bal;
         }
-        if (bal !== null && dtNorm >= (bucket.latestDt.woori || '')) {
-          bucket.latestDt.woori = dtNorm;
-          bucket.endBalances.woori = bal;
+        if (bal !== null && dtNorm >= (bucket.latestDt[bank] || '')) {
+          bucket.latestDt[bank] = dtNorm;
+          bucket.endBalances[bank] = bal;
         }
 
         const fp = bank + '|' + acctKey + '|' + dtNorm + '|' + outAmt + '|' + inAmt + '|' + (bal !== null ? bal : '') + '|' + summary + '|' + desc;
+        const txCtx = { bank: bank, dtNorm: dtNorm, ym: ym, summary: summary, desc: desc, memo: memo, outAmt: outAmt, inAmt: inAmt, kwList: kwList, atMaxByYm: atMaxByYm, cancelled: row.cancelled };
+
         if (appState.processedIds.indexOf(fp) !== -1) {
-          dupCount += 1;
+          if (enrichExistingMemoTx(bucket, fp, memo, txCtx)) {
+            memoUpdatedCount += 1;
+          } else {
+            dupCount += 1;
+          }
           return;
         }
         appState.processedIds.push(fp);
         if (outAmt === 0 && inAmt === 0) return;
 
         const shortDt = dtNorm.slice(5, 16).replace(/-/g, '/');
-        const combined = summary + ' ' + desc;
-        let badge = bank === 'kyongnam' ? '🟧 경남' : '🟦 우리';
-        let txType = inAmt > 0 ? 'BANK_IN' : 'BANK_OUT';
-        let sub = summary;
-        let isUncertain = false;
-
-        if (row.cancelled) {
-          badge = '🔄 대체취소(상계)';
-          sub = '이체오류/취소 (매출·지출 제외)';
-        } else if (inAmt > 0) {
-          if (/갤럭시아/i.test(combined)) {
-            bucket.inflowTotals.pgCard += inAmt;
-            badge = '🟦 갤럭시아PG';
-            sub = 'PG 정산입금';
-          } else if (/위챗|알리|KSNET|ＫＳＮＥＴ/i.test(combined)) {
-            bucket.inflowTotals.pgCard += inAmt;
-            badge = '🟦 간편결제PG';
-            sub = '위챗/알리(KSNET) 정산';
-          } else if (/김대윤|유픽의원/.test(combined)) {
-            bucket.inflowTotals.cashHana += inAmt;
-            badge = '💵 현금입금';
-            sub = '원장님 직접 현금입금';
-          } else if (/^(KB|하나|NH|현대|BC|신한|우|삼성|롯데)/i.test(desc) || /캐시백|환불|^\d{4}\s*(신한|삼성|현대|국민|하나|우리|롯데)/.test(combined)) {
-            bucket.inflowTotals.wirelessCard += inAmt;
-            badge = '💳 단말기·카드정산';
-            sub = '카드사 정산·캐시백';
-          } else if (/고용노동부|K-패스|결산이자|의료배상공제조합|JIN YINSHI/i.test(combined)) {
-            bucket.inflowTotals.cashHana += inAmt;
-            badge = '🟦 지원금·환급·이자';
-            sub = '정부지원/환급/이자수입';
-          } else {
-            bucket.inflowTotals.pgCard += inAmt;
-            badge = '🤔 기타입금(확인)';
-            sub = '확인 필요 (미분류 입금)';
-            isUncertain = true;
-          }
-        } else if (outAmt > 0) {
-          const isInternal = (/김대윤/.test(desc) && !/국고|서울특징|KB손보/.test(desc)) || kwList.some(function(kw) { return combined.includes(kw); });
-          const dayNum = parseInt(dtNorm.slice(8, 10), 10) || 0;
-
-          if (isInternal) {
-            badge = '🔄 내부/본인이체';
-            sub = '경비 제외 (본인·내부이체)';
-          } else if (/대신제50호|임대|월세|관리비/i.test(combined)) {
-            bucket.outflowTotals.rent += outAmt;
-            badge = '🏢 임대료(SC대신)';
-            sub = '25일경 건물 임대료 이체';
-          } else if (/오릭스|캐피탈|ＢＮＫ캐피탈|BNK캐피탈|리스/i.test(combined)) {
-            bucket.outflowTotals.lease += outAmt;
-            badge = '⚙️ 장비리스료';
-            sub = '5일 리스 출금';
-          } else if (/국고|서울특징|국민연금|건강보험|고용보험|산재보험|원천세|지방세|유어택스/i.test(combined)) {
-            bucket.outflowTotals.taxInsRent += outAmt;
-            badge = '🏛️ 세금·4대보험';
-            sub = '10일 세금·4대보험·세무';
-          } else if (/삼성카드|우리카드|롯데카드|신한카드|ＫＢ카드|KB카드|현대카드|경남카드|경남비씨카드|하나카드/i.test(combined)) {
-            if (/삼성카드/i.test(combined)) bucket.cards.card13.currentMonthSwipes += outAmt;
-            else if (/경남카드|경남비씨/i.test(combined)) bucket.cards.card23.currentMonthSwipes += outAmt;
-            else bucket.cards.card14.currentMonthSwipes += outAmt;
-            badge = '💳 카드대금출금';
-            sub = '사업자카드 결제출금';
-          } else if (/주식회사 에이티/.test(combined)) {
-            if (/재료|물품/.test(combined) || (!/해외|국내|마케팅|수수료/.test(combined) && outAmt === atMaxByYm[ym])) {
-              bucket.cards.scheduledSupplyTransfer20 += outAmt;
-              badge = '💉 에이티움(재료비)';
-              sub = '에이티움 본사 재료·물품';
-            } else {
-              bucket.outflowTotals.marketingCard += outAmt;
-              badge = '📢 에이티움(수수료·마케팅)';
-              sub = '해외/국내 수수료·마케팅비';
-            }
-          } else if (/씨메디|애브비|오멜론|재료/i.test(combined)) {
-            bucket.cards.scheduledSupplyTransfer20 += outAmt;
-            badge = '💉 재료·약품이체';
-            sub = '애브비/씨메디 등 거래처';
-          } else if (/씨유이/.test(combined)) {
-            bucket.outflowTotals.marketingCard += outAmt;
-            badge = '📢 메이투안(씨유이)';
-            sub = '해외마케팅 전달수수료';
-          } else if (/힐링페이퍼|힐링페|언니가이드|강남언니|바비톡|네이버|메타|크리에이트|레드테이블/i.test(combined)) {
-            bucket.outflowTotals.marketingCard += outAmt;
-            badge = '📢 마케팅·유치비';
-            sub = '강남언니·언니가이드·레드테이블';
-          } else if (/글로벌텍스프리/i.test(combined)) {
-            bucket.outflowTotals.welfareOtherCard += outAmt;
-            badge = '🌐 택스리펀정산';
-            sub = '글로벌텍스프리 정산출금';
-          } else if (/제이앤씨/.test(combined)) {
-            bucket.outflowTotals.welfareOtherCard += outAmt;
-            badge = '📻 무전기·소모품';
-            sub = '제이앤씨 수리/소모품비';
-          } else if (/박득남/.test(desc)) {
-            if (outAmt >= 500000) {
-              bucket.outflowTotals.payroll += outAmt;
-              badge = '👥 급여(부원장님)';
-              sub = '박득남 부원장님 급여';
-            } else {
-              bucket.outflowTotals.welfareOtherCard += outAmt;
-              badge = '🏥 원내 소액정산';
-              sub = '부원장님 소액 정산/경비';
-            }
-          } else if (/이유준|신현호|HONG SEU/i.test(desc)) {
-            bucket.outflowTotals.payroll += outAmt;
-            badge = '👥 급여(알바원장)';
-            sub = '알바원장님 급여';
-          } else if (/찬솔크린|서울위생|노무사|헤이페이|다우기술|렌탈케어|인텔릭스|KT통신|비즈플레이|대한의사협회|대출이자|한도미사용|KB손보|한국의료분|Npay/i.test(combined)) {
-            bucket.outflowTotals.welfareOtherCard += outAmt;
-            badge = '🏥 병원운영·고정비';
-            sub = '청소/위생/대출/렌탈/보험';
-          } else if ((dayNum >= 4 && dayNum <= 6 && /모바일/.test(summary)) || (/^(하나|신한|국민|우리|토뱅|카카|농협)[가-힣A-Z\s]{2,15}$/.test(desc) && outAmt >= 150000)) {
-            bucket.outflowTotals.payroll += outAmt;
-            badge = '👥 급여';
-            sub = '5일 직원 급여이체';
-          } else {
-            bucket.outflowTotals.welfareOtherCard += outAmt;
-            badge = '🤔 운영·기타(확인)';
-            sub = '확인 필요 (미분류 지출)';
-            isUncertain = true;
-          }
+        const cls = classifyBankTransaction(txCtx);
+        if (cls.bucketTarget) {
+          applyBucketTarget(bucket, cls.bucketTarget, inAmt > 0 ? inAmt : outAmt);
         }
 
         bucket.transactions.push({
           id: fp,
           datetime: shortDt,
           sortDt: dtNorm,
-          type: txType,
-          badge: badge,
+          type: cls.txType,
+          badge: cls.badge,
           title: maskCustomerName(desc || summary || '거래내역'),
-          sub: sub,
+          sub: cls.sub,
+          memo: memo,
+          bucketTarget: cls.bucketTarget,
           amount: inAmt > 0 ? inAmt : outAmt,
-          isUncertain: isUncertain
+          isUncertain: cls.isUncertain
         });
         addedCount += 1;
       });
@@ -1767,14 +1879,14 @@
       syncLatestMonthToTopLevel();
       syncMonthSelectOptions();
       if (latestBal !== null) {
-        appState.balances.updatedAt = '우리 ' + latestDt.slice(5, 16) + ' 엑셀반영';
+        appState.balances.updatedAt = (bank === 'kyongnam' ? '경남 ' : '우리 ') + latestDt.slice(5, 16) + ' 엑셀반영';
       }
 
       syncInputsFromState();
       safeSaveState();
       renderAll(true);
       flashBox(bank === 'kyongnam' ? 'sb-box-kyongnam' : 'sb-box-woori');
-      return { addedCount: addedCount, dupCount: dupCount, latestBal: latestBal, bank: bank };
+      return { addedCount: addedCount, dupCount: dupCount, memoUpdatedCount: memoUpdatedCount, latestBal: latestBal, bank: bank };
     }
 
     function parseWonNumber(str) {
@@ -1810,6 +1922,22 @@
       });
       if (headerIdx === -1) return null;
 
+      const headerCols = parseCsvLine(lines[headerIdx]).map(function(h) { return h.replace(/\s+/g, ''); });
+      const findCsvCol = function(patterns, fallbackIdx) {
+        const idx = headerCols.findIndex(function(h) {
+          return patterns.some(function(p) { return h.includes(p); });
+        });
+        return idx !== -1 ? idx : fallbackIdx;
+      };
+      const colDt = findCsvCol(['거래일시'], 1);
+      const colKind = findCsvCol(['거래구분', '적요'], 2);
+      const colIo = findCsvCol(['입출구분'], 3);
+      const colOut = findCsvCol(['출금금액'], 4);
+      const colIn = findCsvCol(['입금금액'], 5);
+      const colBal = findCsvCol(['거래후잔액', '잔액'], 6);
+      const colDesc = findCsvCol(['거래내용', '기재내용', '내용'], 7);
+      const colMemo = findCsvCol(['메모', '거래메모', '비고'], 9);
+
       if (!appState.settings.realDataMode) {
         resetToRealWooriOnly();
       }
@@ -1817,6 +1945,7 @@
 
       let addedCount = 0;
       let dupCount = 0;
+      let memoUpdatedCount = 0;
       let latestDt = '';
       let latestBal = null;
       const kwList = String(appState.settings.internalKeywords || '집금,내통장,내부,피부과').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
@@ -1825,17 +1954,17 @@
         const cols = parseCsvLine(lines[i]);
         if (cols.length < 8) continue;
         if (cols[0] === '합계') continue;
-        const dt = cols[1] || '';
+        const dt = cols[colDt] || '';
         if (!/^\d{4}[.\-/]\d{2}[.\-/]\d{2}/.test(dt)) continue;
 
-        const kind = cols[2] || '';
-        const ioType = cols[3] || '';
-        const outAmt = parseWonNumber(cols[4]);
-        const inAmt = parseWonNumber(cols[5]);
-        const balRaw = String(cols[6] || '').trim();
+        const kind = cols[colKind] || '';
+        const ioType = cols[colIo] || '';
+        const outAmt = parseWonNumber(cols[colOut]);
+        const inAmt = parseWonNumber(cols[colIn]);
+        const balRaw = String(cols[colBal] || '').trim();
         const bal = balRaw ? parseWonNumber(balRaw) : null;
-        const desc = cols[7] || '';
-        const memo = cols[9] || '';
+        const desc = cols[colDesc] || '';
+        const memo = (cols[colMemo] || '').trim();
 
         if (outAmt === 0 && inAmt === 0 && bal === null) continue;
 
@@ -1853,80 +1982,37 @@
         }
 
         const fp = 'kyongnam|207-0172-8715-04|' + dtNorm + '|' + outAmt + '|' + inAmt + '|' + (bal !== null ? bal : '') + '|' + kind + '|' + desc;
+        const txCtx = { bank: 'kyongnam', dtNorm: dtNorm, ym: ym, summary: kind || ioType, desc: desc, memo: memo, outAmt: outAmt, inAmt: inAmt, kwList: kwList, atMaxByYm: {}, cancelled: false };
+
         if (appState.processedIds.indexOf(fp) !== -1) {
-          dupCount += 1;
+          if (enrichExistingMemoTx(bucket, fp, memo, txCtx)) {
+            memoUpdatedCount += 1;
+          } else {
+            dupCount += 1;
+          }
           continue;
         }
         appState.processedIds.push(fp);
         if (outAmt === 0 && inAmt === 0) continue;
 
         const shortDt = dtNorm.slice(5, 16).replace(/-/g, '/');
-        const combined = desc + ' ' + memo + ' ' + kind;
-        let badge = '🟧 경남';
-        let txType = inAmt > 0 ? 'BANK_IN' : 'BANK_OUT';
-        let sub = kind || ioType;
-        let isUncertain = false;
-
-        if (inAmt > 0) {
-          if (/갤럭시아/i.test(combined)) {
-            bucket.inflowTotals.pgCard += inAmt;
-            badge = '🟦 갤럭시아PG';
-            sub = '경남 계좌 PG 정산입금';
-          } else if (/힐링페이퍼|강남언니|여신티켓|바비톡|언니가이드/i.test(combined)) {
-            bucket.inflowTotals.platformKyongnam += inAmt;
-            badge = /힐링/.test(combined) ? '🟧 강남언니' : '🟧 여신티켓';
-            sub = '플랫폼 정산입금';
-          } else if (/김대윤/.test(desc)) {
-            badge = '🔄 내부/본인이체';
-            sub = '원장님 계좌간 이동 (매출 제외)';
-          } else if (/제로페이|비씨카드|캐시백|^(KB|하나|NH|현대|BC|신한|우|삼성|롯데)/i.test(desc)) {
-            bucket.inflowTotals.wirelessCard += inAmt;
-            badge = '💳 제로페이·카드정산';
-            sub = '제로페이·캐시백·카드 정산';
-          } else if (/결산이자/.test(combined)) {
-            bucket.inflowTotals.platformKyongnam += inAmt;
-            badge = '🏦 예금이자';
-            sub = '경남 예금결산이자';
-          } else {
-            bucket.inflowTotals.platformKyongnam += inAmt;
-            badge = '🤔 경남기타입금';
-            isUncertain = true;
-          }
-        } else if (outAmt > 0) {
-          const isInternal = /김대윤/.test(desc) || kwList.some(function(kw) { return combined.includes(kw); });
-          const dayNum = parseInt(dtNorm.slice(8, 10), 10) || 0;
-          if (isInternal) {
-            badge = '🔄 내부/본인이체';
-            sub = '경비 제외 (본인·내부이체)';
-          } else if (/문혜연/.test(combined)) {
-            badge = '🏠 가사·생활비인출';
-            sub = '병원경비 제외 (가족 생활비)';
-          } else if (/대출이자/.test(combined)) {
-            bucket.outflowTotals.welfareOtherCard += outAmt;
-            badge = '🏦 대출이자(경남)';
-            sub = '경남은행 대출이자 출금';
-          } else if (dayNum >= 4 && dayNum <= 6 && outAmt >= 500000) {
-            bucket.outflowTotals.payroll += outAmt;
-            badge = '👥 5일 정기자문·급여';
-            sub = '매월 5일 지급';
-          } else {
-            bucket.outflowTotals.welfareOtherCard += outAmt;
-            badge = '🤔 경남출금(확인)';
-            sub = '확인 필요 (미분류 지출)';
-            isUncertain = true;
-          }
+        const cls = classifyBankTransaction(txCtx);
+        if (cls.bucketTarget) {
+          applyBucketTarget(bucket, cls.bucketTarget, inAmt > 0 ? inAmt : outAmt);
         }
 
         bucket.transactions.push({
           id: fp,
           datetime: shortDt,
           sortDt: dtNorm,
-          type: txType,
-          badge: badge,
+          type: cls.txType,
+          badge: cls.badge,
           title: maskCustomerName(desc || kind || '경남거래'),
-          sub: sub,
+          sub: cls.sub,
+          memo: memo,
+          bucketTarget: cls.bucketTarget,
           amount: inAmt > 0 ? inAmt : outAmt,
-          isUncertain: isUncertain
+          isUncertain: cls.isUncertain
         });
         addedCount += 1;
       }
@@ -1941,7 +2027,7 @@
       safeSaveState();
       renderAll(true);
       flashBox('sb-box-kyongnam');
-      return { addedCount: addedCount, dupCount: dupCount, latestBal: latestBal, bank: 'kyongnam' };
+      return { addedCount: addedCount, dupCount: dupCount, memoUpdatedCount: memoUpdatedCount, latestBal: latestBal, bank: 'kyongnam' };
     }
 
     function handleFileUpload(event, expectedBank) {
@@ -1951,6 +2037,7 @@
 
       let totalAdded = 0;
       let totalDup = 0;
+      let totalMemoUpdated = 0;
       let errors = [];
 
       const readOne = function(file) {
@@ -1958,12 +2045,16 @@
           const reader = new FileReader();
           reader.onload = function(e) {
             const text = decodeBankBuffer(e.target.result);
-            if (/<table/i.test(text) && text.includes('거래일시')) {
+            if (/<table/i.test(text) && (text.includes('거래일시') || text.includes('거래일자'))) {
               const res = importBankHtmlTable(text);
               if (res && res.error) errors.push(file.name + ': ' + res.error);
               else if (res && expectedBank && res.bank !== expectedBank) {
                 errors.push(file.name + ': 선택한 버튼과 다른 은행(' + (res.bank === 'woori' ? '우리은행' : '경남은행') + ') 파일입니다');
-              } else if (res) { totalAdded += res.addedCount; totalDup += res.dupCount; }
+              } else if (res) {
+                totalAdded += res.addedCount;
+                totalDup += res.dupCount;
+                totalMemoUpdated += (res.memoUpdatedCount || 0);
+              }
               return resolve();
             }
             if (text.includes('거래일시') && text.includes('출금금액') && text.includes('입금금액')) {
@@ -1972,7 +2063,11 @@
                 return resolve();
               }
               const res = importKyongnamCsv(text);
-              if (res) { totalAdded += res.addedCount; totalDup += res.dupCount; }
+              if (res) {
+                totalAdded += res.addedCount;
+                totalDup += res.dupCount;
+                totalMemoUpdated += (res.memoUpdatedCount || 0);
+              }
               return resolve();
             }
             const lines = text.split(/\r?\n/).map(function(l) { return l.trim(); }).filter(Boolean);
@@ -1994,6 +2089,7 @@
         const monthsCount = Object.keys(appState.monthlyData || {}).length;
         const bankPrefix = expectedBank === 'woori' ? '🟦 우리은행 ' : (expectedBank === 'kyongnam' ? '🟧 경남은행 ' : '');
         let msg = '✅ ' + bankPrefix + files.length + '개 파일 처리 완료: 신규 ' + totalAdded + '건 반영';
+        if (totalMemoUpdated > 0) msg += ' · 📝 메모 보완 ' + totalMemoUpdated + '건';
         if (totalDup > 0) msg += ' · 중복 ' + totalDup + '건 자동 제외';
         if (monthsCount > 0) msg += ' (' + monthsCount + '개월 누적)';
         if (errors.length > 0) msg += ' | ⚠️ ' + errors.join(', ');
@@ -2639,10 +2735,11 @@
         const color = t.type === 'BANK_IN' ? 'text-[var(--success)]' : (t.type === 'CARD_SWIPE' ? 'text-[var(--warning)]' : 'opacity-80');
         const prefix = (t.type === 'BANK_IN' && t.amount > 0) ? '+' : (t.type === 'CARD_SWIPE' ? (t.amount < 0 ? '취소 ' : '승인 ') : '-');
         const uncBorder = t.isUncertain ? ' bg-[var(--secondary)]/50 px-2 rounded' : '';
+        const memoBadge = t.memo ? ' <span class="text-[var(--primary)] font-medium">· 📝 ' + escapeHtml(t.memo) + '</span>' : '';
         return '<div class="py-2 flex items-center justify-between gap-2' + uncBorder + '">' +
           '<div class="truncate">' +
             '<span class="font-bold">' + escapeHtml(t.badge) + ' ' + escapeHtml(t.title) + '</span>' +
-            '<div class="text-[var(--muted-foreground)] truncate">' + escapeHtml(t.datetime) + ' · ' + escapeHtml(t.sub) + '</div>' +
+            '<div class="text-[var(--muted-foreground)] truncate">' + escapeHtml(t.datetime) + ' · ' + escapeHtml(t.sub) + memoBadge + '</div>' +
           '</div>' +
           '<span class="font-mono font-bold ' + color + ' shrink-0">' + prefix + fmtWon(t.amount) + '</span>' +
         '</div>';
