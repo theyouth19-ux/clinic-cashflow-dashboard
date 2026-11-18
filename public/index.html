@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#0f172a" />
-  <title>피부과 의원 자금·손익 관제 (PC 자동수집 · 폴드5 연동)</title>
+  <title>피부과 의원 월별 자금·손익 관제 (우리·경남 엑셀 자동분류)</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="xlsx.full.min.js"></script>
   <style>
     :root {
       --background: #0f172a;
@@ -73,17 +74,17 @@
       </div>
 
       <div class="flex flex-wrap items-center gap-1.5">
-        <button type="button" onclick="switchTopPanel('whatif')" class="px-2.5 py-1.5 text-xs font-bold rounded-lg bg-[var(--warning)] text-black transition hover:opacity-90">
-          🧪 시뮬레이터 · ⚙️ 초기값
+        <button type="button" onclick="switchTopPanel('excel')" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-[var(--success)] text-black transition hover:opacity-90">
+          📂 엑셀/CSV 올리기
         </button>
-        <button type="button" onclick="switchTopPanel('excel')" class="px-2.5 py-1.5 text-xs font-bold rounded-lg bg-[var(--success)] text-black transition hover:opacity-90">
-          📂 엑셀 올리기 · ☁️ 폴드5
+        <button type="button" onclick="switchTopPanel('whatif')" class="px-2.5 py-1.5 text-xs font-bold rounded-lg bg-[var(--warning)] text-black transition hover:opacity-90">
+          🧪 시뮬레이터 · ⚙️ 설정
         </button>
         <button type="button" id="btn-mode-folded" onclick="setScreenMode('folded')" class="px-2.5 py-1.5 text-xs rounded-lg bg-[var(--secondary)] text-[var(--secondary-foreground)] transition">
-          📱 폴드5(접음)
+          📱 모바일(접음)
         </button>
         <button type="button" id="btn-mode-unfolded" onclick="setScreenMode('unfolded')" class="px-2.5 py-1.5 text-xs rounded-lg tab-active transition">
-          🖥️ PC · 폴드5(펼침)
+          🖥️ PC · 펼침
         </button>
       </div>
     </div>
@@ -125,78 +126,77 @@
 
     <div id="sim-toast" class="hidden p-2.5 rounded-xl bg-[var(--secondary)] text-xs font-semibold text-[var(--success)]"></div>
 
-    <!-- PANEL 1: 📂 우리·경남 엑셀(.xls/.csv) 업로드 · 중복검증 · 폴드5 동기화 (기본 접힘) -->
-    <div id="top-panel-excel" class="bg-[var(--card)] border-2 border-[var(--success)] rounded-xl p-4 space-y-4 hidden text-xs">
+    <!-- PANEL 1: 📂 우리·경남 엑셀/CSV 업로드 · 자동분류 · 초기화 -->
+    <div id="top-panel-excel" class="bg-[var(--card)] border-2 border-[var(--success)] rounded-xl p-4 space-y-3 hidden text-xs">
       <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--card-border)] pb-3">
         <div class="flex flex-wrap items-center gap-2">
-          <span class="px-2 py-0.5 rounded bg-[var(--success)] text-black font-bold">월 0원 · 엑셀 자동분류 & 중복방지</span>
+          <span class="px-2 py-0.5 rounded bg-[var(--success)] text-black font-bold">월 0원 · 메모/거래처 자동분류</span>
           <span id="real-mode-badge" class="text-[var(--warning)] font-semibold">⚠️ 테스트용 가상 샘플</span>
         </div>
-        <button type="button" onclick="switchTopPanel('none')" class="text-[var(--muted-foreground)] hover:underline">▲ 패널 접기</button>
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="resetToRealWooriOnly()" class="px-2.5 py-1 rounded-lg bg-[var(--error)] text-white font-bold hover:opacity-90">
+            🧹 전체 초기화 (0원)
+          </button>
+          <button type="button" onclick="switchTopPanel('none')" class="text-[var(--muted-foreground)] hover:underline">▲ 접기</button>
+        </div>
       </div>
 
-      <!-- Excel Upload & Quick Bank Links -->
-      <div class="p-3 rounded-xl bg-[var(--background)] border border-[var(--primary)] space-y-2.5">
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          <div class="font-bold text-[var(--primary)]">1. 은행 엑셀 파일 올리기 (항상 '이번 달 1일 ~ 오늘'로 받아도 중복 자동 제외)</div>
-          <div class="flex flex-wrap gap-1.5">
-            <button type="button" onclick="openBankFastQuery('woori')" class="px-2.5 py-1 rounded-lg bg-[var(--secondary)] hover:opacity-90 font-semibold">
-              🟦 우리 빠른조회 열기 (계좌복사)
-            </button>
-            <button type="button" onclick="openBankFastQuery('kyongnam')" class="px-2.5 py-1 rounded-lg bg-[var(--secondary)] hover:opacity-90 font-semibold">
-              🟧 경남 계좌번호 복사
+      <!-- 2-Card Bank Upload -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div class="p-3.5 rounded-xl bg-[var(--background)] border border-[var(--primary)] flex flex-col justify-between gap-2.5">
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <div class="font-bold text-sm text-[var(--primary)]">🟦 우리은행</div>
+              <div class="text-[11px] font-mono text-[var(--muted-foreground)]">1005-104-863854</div>
+            </div>
+            <button type="button" onclick="openBankFastQuery('woori')" class="px-2.5 py-1 rounded-lg bg-[var(--secondary)] hover:opacity-90 font-semibold text-[11px]">
+              빠른조회 열기 (계좌복사)
             </button>
           </div>
-        </div>
-        <div class="flex flex-wrap items-center gap-2">
-          <label class="px-4 py-2 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] font-bold cursor-pointer hover:opacity-90">
-            🟦 우리은행 (1005-104-863854) 엑셀 올리기
+          <label class="w-full text-center px-4 py-2.5 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] font-bold cursor-pointer hover:opacity-90">
+            🟦 우리은행 엑셀 / CSV 올리기
             <input id="excel-file-woori" type="file" multiple accept=".xls,.xlsx,.csv,.txt,.tsv,.html,.htm" onchange="handleFileUpload(event, 'woori')" class="hidden" />
           </label>
-          <label class="px-4 py-2 rounded-lg bg-[var(--warning)] text-black font-bold cursor-pointer hover:opacity-90">
-            🟧 경남은행 (207-0172-8715-04) 엑셀 올리기
+        </div>
+
+        <div class="p-3.5 rounded-xl bg-[var(--background)] border border-[var(--warning)] flex flex-col justify-between gap-2.5">
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <div class="font-bold text-sm text-[var(--warning)]">🟧 경남은행</div>
+              <div class="text-[11px] font-mono text-[var(--muted-foreground)]">207-0172-8715-04</div>
+            </div>
+            <button type="button" onclick="openBankFastQuery('kyongnam')" class="px-2.5 py-1 rounded-lg bg-[var(--secondary)] hover:opacity-90 font-semibold text-[11px]">
+              계좌번호 복사
+            </button>
+          </div>
+          <label class="w-full text-center px-4 py-2.5 rounded-lg bg-[var(--warning)] text-black font-bold cursor-pointer hover:opacity-90">
+            🟧 경남은행 엑셀 / CSV 올리기
             <input id="excel-file-kyongnam" type="file" multiple accept=".xls,.xlsx,.csv,.txt,.tsv,.html,.htm" onchange="handleFileUpload(event, 'kyongnam')" class="hidden" />
           </label>
         </div>
-        <div class="text-[11px] text-[var(--muted-foreground)]">
-          * 파일명이 같더라도 버튼만 구분해서 올려주시면 자동으로 계좌를 검증하고 중복 기간은 건너뜁니다.
-        </div>
       </div>
 
-      <!-- Quick Woori Balance & Reset -->
-      <div class="p-3 rounded-xl bg-[var(--background)] border border-[var(--border)] flex flex-wrap items-center justify-between gap-2">
-        <div class="flex flex-wrap items-center gap-2">
-          <span class="font-bold">🟦 우리 1005-104-863854 실잔액 보정:</span>
-          <input id="quick-woori-bal" type="number" step="1000" placeholder="예: 34500000" class="w-40 bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1 font-mono font-bold" />
-          <button type="button" onclick="applyQuickWooriRealBalance()" class="px-3 py-1 rounded-lg bg-[var(--success)] text-black font-bold">
-            ✅ 실잔액 즉시 반영
-          </button>
-        </div>
-        <div class="flex flex-wrap items-center gap-1.5">
-          <button type="button" onclick="resetToRealWooriOnly()" class="px-2.5 py-1 rounded-lg bg-[var(--error)] text-white font-bold">
-            🧹 0원 초기화
-          </button>
-          <button type="button" onclick="resetDemoData()" class="px-2.5 py-1 rounded-lg bg-[var(--secondary)] font-semibold">
-            🔄 샘플 복원
-          </button>
-        </div>
+      <div class="text-[11px] text-[var(--muted-foreground)] px-1">
+        💡 메모가 포함된 파일을 올리면 거래처·메모·최신 잔액·월별 손익이 자동 반영되며, 같은 기간을 다시 올려도 중복 거래는 자동 제외됩니다.
       </div>
 
-      <!-- Fold5 Cloud Sync -->
-      <div class="p-3 rounded-xl bg-[var(--background)] border border-[var(--border)] space-y-2">
-        <div class="font-bold text-[var(--success)]">2. PC ↔ 갤럭시 폴드5 구글 시트 원장 동기화</div>
-        <div class="grid grid-cols-1 sm:grid-cols-5 gap-2">
+      <!-- Optional Fold5 Cloud Sync (Collapsed by default) -->
+      <details class="p-2.5 rounded-xl bg-[var(--background)] border border-[var(--border)]">
+        <summary class="cursor-pointer font-semibold text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
+          ☁️ PC ↔ 모바일(폴드5) 구글 시트 클라우드 동기화 (선택사항)
+        </summary>
+        <div class="grid grid-cols-1 sm:grid-cols-5 gap-2 mt-2.5">
           <input id="cloud-webhook-url" type="text" placeholder="구글 시트 웹앱 URL (https://script.google.com/macros/s/.../exec)" class="sm:col-span-2 bg-[var(--card)] border border-[var(--border)] rounded-lg px-3 py-1.5" />
           <input id="cloud-secret-token" type="password" value="clinic-24" placeholder="비밀 토큰 (기본: clinic-24)" class="bg-[var(--card)] border border-[var(--border)] rounded-lg px-3 py-1.5 font-mono" />
           <button type="button" onclick="pushStateToCloudWebhook()" class="px-3 py-1.5 rounded-lg bg-[var(--success)] text-black font-bold">
-            ⬆️ 시트에 저장(Push)
+            ⬆️ 시트에 저장
           </button>
           <button type="button" onclick="syncFromCloudWebhook()" class="px-3 py-1.5 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] font-bold">
-            ⬇️ 시트에서 불러오기
+            ⬇️ 불러오기
           </button>
         </div>
-        <div id="cloud-save-msg" class="hidden font-semibold text-[var(--success)]"></div>
-      </div>
+        <div id="cloud-save-msg" class="hidden font-semibold text-[var(--success)] mt-2"></div>
+      </details>
     </div>
 
     <!-- PANEL 2: 🧪 경영 손익 시뮬레이터 & ⚙️ 초기값 설정 창 -->
@@ -409,8 +409,8 @@
 
       <div class="flex items-center justify-between px-1">
         <div>
-          <div class="text-xs text-[var(--muted-foreground)]">우리·하나·경남 빠른조회 + 갤럭시아PG + 13·14·23일 카드</div>
-          <h1 class="text-base font-bold">🏥 피부과 자금·손익 관제 (PC·폴드5 겸용)</h1>
+          <div class="text-xs text-[var(--muted-foreground)]">우리은행 + 경남은행 엑셀/CSV 월별 관제 · 13·14·23일 카드 · 24일 기준</div>
+          <h1 class="text-base font-bold">🏥 피부과 월별 자금·손익 관제</h1>
         </div>
         <span id="live-status-badge" class="px-2 py-0.5 text-xs font-semibold rounded-full bg-[var(--secondary)] text-[var(--success)]">● 24일 기준일 적용</span>
       </div>
@@ -613,7 +613,7 @@
             <span id="snap-updated-at" class="text-xs text-[var(--muted-foreground)]">실시간 동기화</span>
           </div>
           <select id="snapshot-select" onchange="renderAll()" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs font-semibold">
-            <option value="now">오늘 현재 실시간 (PC 자동수집 잔액 반영)</option>
+            <option value="now">현재 기준 요약 (업로드된 최신 잔액 반영)</option>
             <option value="day24_prev1">전월 24일 공식 기준일 (23일 경남카드 출금 완료 직후)</option>
             <option value="day24_prev2">전전월 24일 공식 기준일 (모든 출금 완료 직후)</option>
           </select>
@@ -623,7 +623,7 @@
           <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3">
             <div class="text-xs text-[var(--muted-foreground)]">① 2개통장 총잔액</div>
             <div id="snap-total-bank" class="text-base font-bold font-mono mt-1">6,562만 원</div>
-            <div class="text-xs text-[var(--muted-foreground)] mt-0.5">우리+경남 (팝빌연동)</div>
+            <div class="text-xs text-[var(--muted-foreground)] mt-0.5">우리+경남 합산</div>
           </div>
           <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3">
             <div class="text-xs text-[var(--muted-foreground)]">➕ ② 받을 정산금</div>
@@ -2122,7 +2122,22 @@
         return new Promise(function(resolve) {
           const reader = new FileReader();
           reader.onload = function(e) {
-            const text = decodeBankBuffer(e.target.result);
+            const bytes = new Uint8Array(e.target.result);
+            const isXlsxZip = bytes.length >= 2 && bytes[0] === 0x50 && bytes[1] === 0x4B;
+            const isXlsOle2 = bytes.length >= 4 && bytes[0] === 0xD0 && bytes[1] === 0xCF && bytes[2] === 0x11 && bytes[3] === 0xE0;
+            let text = '';
+            if ((isXlsxZip || isXlsOle2) && typeof XLSX !== 'undefined') {
+              try {
+                const wb = XLSX.read(bytes, { type: 'array', raw: false });
+                const sheet = wb.Sheets[wb.SheetNames[0]];
+                text = XLSX.utils.sheet_to_csv(sheet);
+              } catch (err) {
+                errors.push(file.name + ': 엑셀 파일 읽기 오류 (' + err.message + ')');
+                return resolve();
+              }
+            } else {
+              text = decodeBankBuffer(e.target.result);
+            }
             if (/<table/i.test(text) && (text.includes('거래일시') || text.includes('거래일자'))) {
               const res = importBankHtmlTable(text);
               if (res && res.error) errors.push(file.name + ': ' + res.error);
@@ -2490,39 +2505,12 @@
       testCount = 0;
       const cntEl = document.getElementById('sim-click-count');
       if (cntEl) cntEl.textContent = '수집 반영: 0건';
-      const quickInp = document.getElementById('quick-woori-bal');
-      if (quickInp) quickInp.value = '';
-      applySimPreset(0, 0, 0, 0);
       syncInputsFromState();
       safeSaveState();
       renderAll(true);
 
       const toast = document.getElementById('sim-toast');
-      toast.textContent = '🧹 샘플 숫자를 모두 0원으로 비웠습니다! 이제 위 입력칸에 우리은행(1005-104-863854) 실제 잔액을 입력하거나 CSV/TXT 내역 파일을 올려주세요.';
-      toast.classList.remove('hidden');
-    }
-
-    function applyQuickWooriRealBalance() {
-      const inp = document.getElementById('quick-woori-bal');
-      const raw = inp ? String(inp.value || '').trim() : '';
-      const val = parseInt(raw, 10);
-      const toast = document.getElementById('sim-toast');
-
-      if (!raw || isNaN(val) || val < 0) {
-        toast.textContent = '⚠️ 우리은행(1005-104-863854)의 실제 현재 잔액을 숫자(원 단위)로 입력해 주세요.';
-        toast.classList.remove('hidden');
-        return;
-      }
-
-      appState.balances.woori = val;
-      appState.balances.updatedAt = '우리 1005-104-863854 실잔액 반영';
-      syncInputsFromState();
-      safeSaveState();
-      renderAll(true);
-      flashBox('sb-box-woori');
-
-      toast.textContent = '✅ 우리은행(1005-104-863854) 실제 잔액이 ' + fmtWon(val) + '으로 반영되었습니다!' +
-        (!appState.settings.realDataMode ? ' (다른 샘플 금액도 지우려면 [🧹 샘플 데이터 모두 0원 초기화]를 눌러주세요.)' : '');
+      toast.textContent = '🧹 모든 데이터를 0원으로 초기화했습니다! 이제 [🟦 우리은행 엑셀 / CSV 올리기]와 [🟧 경남은행 엑셀 / CSV 올리기] 버튼으로 파일을 올려주세요.';
       toast.classList.remove('hidden');
     }
 

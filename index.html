@@ -7,6 +7,7 @@
   <meta name="theme-color" content="#0f172a" />
   <title>피부과 의원 월별 자금·손익 관제 (우리·경남 엑셀 자동분류)</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="xlsx.full.min.js"></script>
   <style>
     :root {
       --background: #0f172a;
@@ -2121,7 +2122,22 @@
         return new Promise(function(resolve) {
           const reader = new FileReader();
           reader.onload = function(e) {
-            const text = decodeBankBuffer(e.target.result);
+            const bytes = new Uint8Array(e.target.result);
+            const isXlsxZip = bytes.length >= 2 && bytes[0] === 0x50 && bytes[1] === 0x4B;
+            const isXlsOle2 = bytes.length >= 4 && bytes[0] === 0xD0 && bytes[1] === 0xCF && bytes[2] === 0x11 && bytes[3] === 0xE0;
+            let text = '';
+            if ((isXlsxZip || isXlsOle2) && typeof XLSX !== 'undefined') {
+              try {
+                const wb = XLSX.read(bytes, { type: 'array', raw: false });
+                const sheet = wb.Sheets[wb.SheetNames[0]];
+                text = XLSX.utils.sheet_to_csv(sheet);
+              } catch (err) {
+                errors.push(file.name + ': 엑셀 파일 읽기 오류 (' + err.message + ')');
+                return resolve();
+              }
+            } else {
+              text = decodeBankBuffer(e.target.result);
+            }
             if (/<table/i.test(text) && (text.includes('거래일시') || text.includes('거래일자'))) {
               const res = importBankHtmlTable(text);
               if (res && res.error) errors.push(file.name + ': ' + res.error);
