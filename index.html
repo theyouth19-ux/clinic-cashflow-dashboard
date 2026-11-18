@@ -1700,7 +1700,7 @@
           bucketTarget = 'outflow.taxInsRent';
           badge = '🏛️ 세금·4대보험';
           sub = '세금·4대보험·세무';
-        } else if (/삼성카드|우리카드|롯데카드|신한카드|ＫＢ카드|KB카드|현대카드|경남카드|경남비씨카드|하나카드/i.test(combined)) {
+        } else if (/삼성카드|우리카드|롯데카드|신한카드|ＫＢ카드|KB카드|케이비국민카드|국민카드|현대카드|경남카드|경남비씨카드|하나카드/i.test(combined)) {
           if (/삼성카드/i.test(combined)) bucketTarget = 'cards.card13';
           else if (/경남카드|경남비씨/i.test(combined)) bucketTarget = 'cards.card23';
           else bucketTarget = 'cards.card14';
