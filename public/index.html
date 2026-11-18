@@ -809,7 +809,7 @@
               </button>
             </div>
           </div>
-          <div id="review-kpi-grid" class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs"></div>
+          <div id="review-kpi-grid" class="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs"></div>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 text-xs">
@@ -3112,6 +3112,13 @@
       let totTaxLump = 0, totUncertain = 0, surplusMonths = 0, deficitMonths = 0;
       let bestYm = ymKeys[0], bestProfit = -Infinity, worstYm = ymKeys[0], worstProfit = Infinity;
 
+      const latestYm = ymKeys[ymKeys.length - 1];
+      const latestYear = latestYm.slice(0, 4);
+      const latestMonthNum = parseInt(latestYm.slice(5, 7), 10) || 12;
+      const vatStartM = latestMonthNum >= 7 ? 7 : 1;
+      const vatRate = getTaxRates(appState.settings).vatRate;
+      let yrRev = 0, yrExp = 0, yrIncAdvance = 0, vatPeriodRev = 0, vatPeriodPrepaid = 0;
+
       ymKeys.forEach(function(ym) {
         const mD = appState.monthlyData[ym];
         const mInf = mD.inflowTotals;
@@ -3143,12 +3150,30 @@
         if (opProfit >= 0) surplusMonths += 1; else deficitMonths += 1;
         if (opProfit > bestProfit) { bestProfit = opProfit; bestYm = ym; }
         if (opProfit < worstProfit) { worstProfit = opProfit; worstYm = ym; }
+
+        const mNum = parseInt(ym.slice(5, 7), 10) || 0;
+        if (ym.slice(0, 4) === latestYear) {
+          yrRev += rev;
+          yrExp += exp;
+          yrIncAdvance += (mOut.incAdvance || 0);
+          if (mNum >= vatStartM) {
+            vatPeriodRev += rev;
+            vatPeriodPrepaid += (mOut.vatLumpSum || 0);
+          }
+        }
       });
 
       const unbanked = Math.max(0, appState.settings.unbankedCash || 0);
       const totRevAll = totRev + unbanked;
       const totOpProfit = totRevAll - totExp;
       const totalLiquidity = totalBankNow + unbanked;
+      const vatPeriodTotal = Math.round((vatPeriodRev + unbanked) * vatRate);
+      const remainVat = Math.max(0, vatPeriodTotal - vatPeriodPrepaid);
+      const yrTotalVat = Math.round((yrRev + unbanked) * vatRate);
+      const yrPreTaxProfit = (yrRev + unbanked) - yrExp - yrTotalVat;
+      const remainIncTax = Math.max(0, calcKoreanIncomeTax(yrPreTaxProfit).totalTax - yrIncAdvance);
+      const remainTotalTax = remainVat + remainIncTax;
+      const pureCashAfterTax = totalLiquidity - remainTotalTax;
       const opMargin = ((totOpProfit / Math.max(1, totRevAll)) * 100).toFixed(1);
       const payrollRatio = ((totPayroll / Math.max(1, totRevAll)) * 100).toFixed(1);
       const fixedRatio = (((totPayroll + totRent + totLease) / Math.max(1, totRevAll)) * 100).toFixed(1);
@@ -3162,7 +3187,8 @@
         '<div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]"><div class="text-[var(--muted-foreground)]">1/1~현재 총매출</div><div class="font-mono font-bold text-sm mt-0.5">' + fmtMan(totRevAll) + '원</div><div class="text-[11px] text-[var(--muted-foreground)]">월평균 ' + fmtMan(avgRev) + '원' + (unbanked > 0 ? ' (현금+' + fmtMan(unbanked) + ')' : '') + '</div></div>' +
         '<div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]"><div class="text-[var(--muted-foreground)]">1/1~현재 영업지출</div><div class="font-mono font-bold text-sm mt-0.5 text-[var(--error)]">-' + fmtMan(totExp) + '원</div><div class="text-[11px] text-[var(--muted-foreground)]">세금일시납 별도 ' + fmtMan(totTaxLump) + '원</div></div>' +
         '<div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]"><div class="text-[var(--muted-foreground)]">1/1~현재 영업순이익</div><div class="font-mono font-bold text-sm mt-0.5 ' + (totOpProfit >= 0 ? 'text-[var(--success)]' : 'text-[var(--error)]') + '">' + (totOpProfit >= 0 ? '+' : '') + fmtMan(totOpProfit) + '원</div><div class="text-[11px] text-[var(--muted-foreground)]">영업이익률 ' + opMargin + '%</div></div>' +
-        '<div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--primary)]"><div class="text-[var(--muted-foreground)]">현재 총 보유자금</div><div class="font-mono font-bold text-sm mt-0.5 text-[var(--primary)]">' + fmtMan(totalLiquidity) + '원</div><div class="text-[11px] text-[var(--muted-foreground)]">통장 ' + fmtMan(totalBankNow) + ' + 현금 ' + fmtMan(unbanked) + '</div></div>';
+        '<div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--primary)]"><div class="text-[var(--muted-foreground)]">현재 총 보유자금</div><div class="font-mono font-bold text-sm mt-0.5 text-[var(--primary)]">' + fmtMan(totalLiquidity) + '원</div><div class="text-[11px] text-[var(--muted-foreground)]">통장 ' + fmtMan(totalBankNow) + ' + 현금 ' + fmtMan(unbanked) + '</div></div>' +
+        '<div class="p-2.5 rounded-lg bg-[var(--background)] border-2 border-[var(--success)]"><div class="font-bold text-[var(--success)]">💎 세금뺀 순수 자금</div><div class="font-mono font-bold text-sm mt-0.5 ' + (pureCashAfterTax >= 0 ? 'text-[var(--success)]' : 'text-[var(--error)]') + '">' + fmtMan(pureCashAfterTax) + '원</div><div class="text-[11px] text-[var(--muted-foreground)]">보유자금 - 남은세금 ' + fmtMan(remainTotalTax) + '</div></div>';
 
       const renderList = function(items) {
         return items.map(function(it, idx) {
