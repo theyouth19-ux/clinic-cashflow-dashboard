@@ -3301,6 +3301,31 @@
       applyFontScale(currentFontScale + delta);
     }
 
+    function upgradeLegacyUncertainCards() {
+      if (!appState || !appState.monthlyData) return false;
+      let changed = false;
+      Object.keys(appState.monthlyData).forEach(function(ym) {
+        const mD = appState.monthlyData[ym];
+        (mD.transactions || []).forEach(function(t) {
+          if (t.isUncertain && /케이비국민카드|케\*비국민카드|국민카드/.test((t.id || '') + ' ' + (t.title || ''))) {
+            if (t.bucketTarget) applyBucketTarget(mD, t.bucketTarget, -t.amount);
+            applyBucketTarget(mD, 'cards.card14', t.amount);
+            t.badge = '💳 카드대금출금';
+            t.sub = '사업자카드 결제출금';
+            t.isUncertain = false;
+            t.bucketTarget = 'cards.card14';
+            t.bucketDelta = t.amount;
+            changed = true;
+          }
+        });
+      });
+      if (changed) {
+        syncLatestMonthToTopLevel();
+        safeSaveState();
+      }
+      return changed;
+    }
+
     // 초기 진입 시 화면 폭에 따라 폴드5(접음) vs PC·폴드5(펼침) 자동 감지
     (function initApp() {
       try {
@@ -3312,6 +3337,7 @@
       } else {
         setScreenMode('unfolded');
       }
+      upgradeLegacyUncertainCards();
       syncMonthSelectOptions();
       renderAll(false);
 
@@ -3321,6 +3347,7 @@
         .then(function(data) {
           if (data && data.ok && data.state) {
             appState = data.state;
+            upgradeLegacyUncertainCards();
             syncMonthSelectOptions();
             renderAll(false);
           }
