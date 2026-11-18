@@ -144,35 +144,42 @@
       <!-- 2-Card Bank Upload -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div class="p-3.5 rounded-xl bg-[var(--background)] border border-[var(--primary)] flex flex-col justify-between gap-2.5">
-          <div class="flex items-center justify-between gap-2">
+          <div class="flex flex-wrap items-center justify-between gap-2">
             <div>
               <div class="font-bold text-sm text-[var(--primary)]">🟦 우리은행</div>
               <div class="text-[11px] font-mono text-[var(--muted-foreground)]">1005-104-863854</div>
             </div>
-            <button type="button" onclick="openBankFastQuery('woori')" class="px-2.5 py-1 rounded-lg bg-[var(--secondary)] hover:opacity-90 font-semibold text-[11px]">
-              빠른조회 열기 (계좌복사)
-            </button>
+            <div class="flex flex-wrap items-center gap-1">
+              <button type="button" onclick="openBankPortal('woori_login')" class="px-2.5 py-1 rounded-lg bg-[var(--secondary)] hover:opacity-90 font-semibold text-[11px]">
+                🔗 우리은행 로그인
+              </button>
+              <button type="button" onclick="openBankFastQuery('woori')" class="px-2 py-1 rounded-lg bg-[var(--secondary)] hover:opacity-90 text-[11px]">
+                빠른조회
+              </button>
+            </div>
           </div>
           <label class="w-full text-center px-4 py-2.5 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] font-bold cursor-pointer hover:opacity-90">
             🟦 우리은행 엑셀 / CSV 올리기
             <input id="excel-file-woori" type="file" multiple accept=".xls,.xlsx,.csv,.txt,.tsv,.html,.htm" onchange="handleFileUpload(event, 'woori')" class="hidden" />
           </label>
+          <div id="uploaded-files-woori" class="text-[11px] text-[var(--muted-foreground)] space-y-0.5">아직 올린 파일 없음</div>
         </div>
 
         <div class="p-3.5 rounded-xl bg-[var(--background)] border border-[var(--warning)] flex flex-col justify-between gap-2.5">
-          <div class="flex items-center justify-between gap-2">
+          <div class="flex flex-wrap items-center justify-between gap-2">
             <div>
               <div class="font-bold text-sm text-[var(--warning)]">🟧 경남은행</div>
               <div class="text-[11px] font-mono text-[var(--muted-foreground)]">207-0172-8715-04</div>
             </div>
             <button type="button" onclick="openBankFastQuery('kyongnam')" class="px-2.5 py-1 rounded-lg bg-[var(--secondary)] hover:opacity-90 font-semibold text-[11px]">
-              계좌번호 복사
+              🔗 경남은행 빠른계좌조회
             </button>
           </div>
           <label class="w-full text-center px-4 py-2.5 rounded-lg bg-[var(--warning)] text-black font-bold cursor-pointer hover:opacity-90">
             🟧 경남은행 엑셀 / CSV 올리기
             <input id="excel-file-kyongnam" type="file" multiple accept=".xls,.xlsx,.csv,.txt,.tsv,.html,.htm" onchange="handleFileUpload(event, 'kyongnam')" class="hidden" />
           </label>
+          <div id="uploaded-files-kyongnam" class="text-[11px] text-[var(--muted-foreground)] space-y-0.5">아직 올린 파일 없음</div>
         </div>
       </div>
 
@@ -1493,6 +1500,19 @@
       }
     }
 
+    function openBankPortal(mode) {
+      const acct = '1005104863854';
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(acct).catch(function() {});
+      }
+      window.open('https://www.wooribank.com/', '_blank', 'noopener');
+      const toast = document.getElementById('sim-toast');
+      if (toast) {
+        toast.textContent = '🏦 우리은행(1005-104-863854) 계좌번호가 복사되었습니다! 로그인 후 메모 포함 엑셀을 다운받아 올려주세요.';
+        toast.classList.remove('hidden');
+      }
+    }
+
     function openBankFastQuery(bank) {
       const acct = bank === 'kyongnam' ? '2070172871504' : '1005104863854';
       const label = bank === 'kyongnam' ? '경남은행(207-0172-8715-04)' : '우리은행(1005-104-863854)';
@@ -1501,10 +1521,12 @@
       }
       if (bank === 'woori') {
         window.open('https://spib.wooribank.com/pib/Dream?withyou=CMSPD0010', '_blank', 'noopener');
+      } else {
+        window.open('https://www.knbank.co.kr/', '_blank', 'noopener');
       }
       const toast = document.getElementById('sim-toast');
       if (toast) {
-        toast.textContent = '🏦 ' + label + ' 계좌번호(' + acct + ')가 복사되었습니다!' + (bank === 'woori' ? ' 조회 후 [엑셀저장] 파일을 올려주세요.' : '');
+        toast.textContent = '🏦 ' + label + ' 계좌번호(' + acct + ')가 복사되었습니다! 조회 후 엑셀 파일을 올려주세요.';
         toast.classList.remove('hidden');
       }
     }
@@ -2118,6 +2140,21 @@
       let totalMemoUpdated = 0;
       let errors = [];
 
+      const recordUploadedFile = function(bankKey, fileName, res) {
+        if (!appState.uploadedFiles) appState.uploadedFiles = { woori: [], kyongnam: [] };
+        const key = bankKey === 'kyongnam' ? 'kyongnam' : 'woori';
+        if (!Array.isArray(appState.uploadedFiles[key])) appState.uploadedFiles[key] = [];
+        const info = {
+          name: fileName,
+          added: res ? (res.addedCount || 0) : 0,
+          dup: res ? (res.dupCount || 0) : 0,
+          memo: res ? (res.memoUpdatedCount || 0) : 0
+        };
+        appState.uploadedFiles[key] = appState.uploadedFiles[key].filter(function(f) { return f.name !== fileName; });
+        appState.uploadedFiles[key].unshift(info);
+        if (appState.uploadedFiles[key].length > 5) appState.uploadedFiles[key] = appState.uploadedFiles[key].slice(0, 5);
+      };
+
       const readOne = function(file) {
         return new Promise(function(resolve) {
           const reader = new FileReader();
@@ -2147,6 +2184,7 @@
                 totalAdded += res.addedCount;
                 totalDup += res.dupCount;
                 totalMemoUpdated += (res.memoUpdatedCount || 0);
+                recordUploadedFile(res.bank, file.name, res);
               }
               return resolve();
             }
@@ -2159,18 +2197,21 @@
                 totalAdded += res.addedCount;
                 totalDup += res.dupCount;
                 totalMemoUpdated += (res.memoUpdatedCount || 0);
+                recordUploadedFile(res.bank, file.name, res);
               }
               return resolve();
             }
             const lines = text.split(/\r?\n/).map(function(l) { return l.trim(); }).filter(Boolean);
+            let lineAdded = 0;
             lines.forEach(function(line) {
               if (!/^(거래일시|승인일시|결제일자|일자|번호|구분|은행명),/.test(line)) {
                 const fp = 'line|' + line;
                 if (appState.processedIds.indexOf(fp) !== -1) { totalDup += 1; return; }
                 const res = processRecordText(line, fp);
-                if (res !== 'EXCLUDED_WOORI') totalAdded += 1;
+                if (res !== 'EXCLUDED_WOORI') { totalAdded += 1; lineAdded += 1; }
               }
             });
+            if (lineAdded > 0) recordUploadedFile(expectedBank || 'woori', file.name, { addedCount: lineAdded, dupCount: 0, memoUpdatedCount: 0 });
             resolve();
           };
           reader.readAsArrayBuffer(file);
@@ -2178,12 +2219,18 @@
       };
 
       Promise.all(files.map(readOne)).then(function() {
+        safeSaveState();
+        renderAll(false);
         const monthsCount = Object.keys(appState.monthlyData || {}).length;
         const bankPrefix = expectedBank === 'woori' ? '🟦 우리은행 ' : (expectedBank === 'kyongnam' ? '🟧 경남은행 ' : '');
         let msg = '✅ ' + bankPrefix + files.length + '개 파일 처리 완료: 신규 ' + totalAdded + '건 반영';
-        if (totalMemoUpdated > 0) msg += ' · 📝 메모 보완 ' + totalMemoUpdated + '건';
-        if (totalDup > 0) msg += ' · 중복 ' + totalDup + '건 자동 제외';
-        if (monthsCount > 0) msg += ' (' + monthsCount + '개월 누적)';
+        if (totalAdded === 0 && totalDup === 0 && totalMemoUpdated === 0 && errors.length === 0) {
+          msg = '⚠️ ' + bankPrefix + '파일에서 거래내역을 찾지 못했습니다. (.xlsx / .xls / .csv 양식을 확인해 주세요)';
+        } else {
+          if (totalMemoUpdated > 0) msg += ' · 📝 메모 보완 ' + totalMemoUpdated + '건';
+          if (totalDup > 0) msg += ' · 중복 ' + totalDup + '건 자동 제외';
+          if (monthsCount > 0) msg += ' (' + monthsCount + '개월 누적)';
+        }
         if (errors.length > 0) msg += ' | ⚠️ ' + errors.join(', ');
         toast.textContent = msg;
         toast.classList.remove('hidden');
@@ -2467,6 +2514,7 @@
       appState.settings.realDataMode = true;
       appState.settings.wooriAccount = '1005-104-863854';
       appState.settings.day24BaseBalance = 0;
+      appState.uploadedFiles = { woori: [], kyongnam: [] };
       appState.balances = {
         woori: 0,
         hana: 0,
@@ -2578,6 +2626,20 @@
           realBadge.textContent = '⚠️ 현재 화면은 테스트용 가상 샘플 금액입니다 (오른쪽 버튼으로 0원 초기화 가능)';
         }
       }
+
+      ['woori', 'kyongnam'].forEach(function(bk) {
+        const el = document.getElementById('uploaded-files-' + bk);
+        if (!el) return;
+        const list = (appState.uploadedFiles && Array.isArray(appState.uploadedFiles[bk])) ? appState.uploadedFiles[bk] : [];
+        if (!list.length) {
+          el.innerHTML = '<span class="opacity-70">아직 올린 파일 없음</span>';
+        } else {
+          el.innerHTML = list.map(function(f) {
+            return '<div class="truncate text-[var(--success)] font-medium">📄 ' + escapeHtml(f.name) +
+              ' <span class="text-[var(--muted-foreground)] font-normal">(신규 ' + f.added + '건' + (f.memo ? ', 메모 ' + f.memo + '건' : '') + (f.dup ? ', 중복제외 ' + f.dup + '건' : '') + ')</span></div>';
+          }).join('');
+        }
+      });
 
       document.getElementById('sb-woori').textContent = fmtWon(appState.balances.woori);
       document.getElementById('sb-kyongnam').textContent = fmtWon(appState.balances.kyongnam);
