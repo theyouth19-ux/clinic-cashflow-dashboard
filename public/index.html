@@ -774,12 +774,25 @@
         </div>
       </div>
 
-      <!-- TAB 5: 🩺 평가 (매출·비용·현금흐름 종합 진단) -->
+      <!-- TAB 5: 🩺 평가 (1월 1일 ~ 현재 시점 종합 진단) -->
       <div id="tab-review" class="space-y-3.5 hidden">
         <div class="bg-[var(--card)] border border-[var(--primary)] rounded-xl p-3.5 space-y-2.5">
           <div class="flex flex-wrap items-center justify-between gap-2">
-            <h2 class="font-bold text-xs text-[var(--primary)]">🩺 병원 재무·현금흐름 종합 평가 (누적 실데이터 기반)</h2>
-            <span id="review-period-badge" class="text-[11px] text-[var(--muted-foreground)]">업로드된 전체 월 기준</span>
+            <h2 class="font-bold text-xs text-[var(--primary)]">🩺 1월 1일 ~ 현재 시점 병원 재무·현금흐름 종합 평가</h2>
+            <span id="review-period-badge" class="text-[11px] text-[var(--muted-foreground)]">1월 1일 ~ 현재 기준</span>
+          </div>
+          <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)] flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div>
+              <span class="font-bold text-[var(--warning)]">💵 미입금 보유현금 (집 보관분)</span>
+              <span class="text-[11px] text-[var(--muted-foreground)] ml-1">· 나중에 통장 입금 시 메모에 <code class="px-1 rounded bg-[var(--secondary)]">보유현금입금</code>을 적으면 매출 중복 없이 자동 상계됩니다</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <input id="inp-unbanked-cash" type="number" step="10000" placeholder="예: 49000000" class="w-36 bg-[var(--card)] border border-[var(--border)] rounded-lg px-2.5 py-1 font-mono font-bold text-right" />
+              <span class="text-[var(--muted-foreground)]">원</span>
+              <button type="button" onclick="applyUnbankedCash()" class="px-3 py-1 rounded-lg bg-[var(--warning)] text-black font-bold hover:opacity-90">
+                반영
+              </button>
+            </div>
           </div>
           <div id="review-kpi-grid" class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs"></div>
         </div>
@@ -823,6 +836,7 @@
         pgIsActual: false,
         vatRate: 0.05,
         incomeTaxRate: 0.33,
+        unbankedCash: 0,
         internalKeywords: '집금,내통장,내부,피부과',
         webhookUrl: '',
         secretToken: 'clinic-24'
@@ -1590,6 +1604,9 @@
           bucketDelta = -inAmt;
           badge = '🔄 급여오류반환(상계)';
           sub = '급여 과오납 반환 (매출 제외·급여 상계)';
+        } else if (/보유현금|기보유|현금보관|기신고현금/.test(memo)) {
+          badge = '💵 보유현금 통장입금(매출제외)';
+          sub = '미입금 보유현금의 통장 입금 (매출 중복 제외)';
         } else if (/갤럭시아/i.test(combined)) {
           bucketTarget = 'inflow.pgCard';
           badge = '🟦 갤럭시아PG';
@@ -1919,6 +1936,8 @@
         const cls = classifyBankTransaction(txCtx);
         if (cls.bucketTarget) {
           applyBucketTarget(bucket, cls.bucketTarget, cls.bucketDelta);
+        } else if (inAmt > 0 && /보유현금|기보유|현금보관|기신고현금/.test(memo)) {
+          appState.settings.unbankedCash = Math.max(0, (appState.settings.unbankedCash || 0) - inAmt);
         }
 
         bucket.transactions.push({
@@ -2116,6 +2135,8 @@
         const cls = classifyBankTransaction(txCtx);
         if (cls.bucketTarget) {
           applyBucketTarget(bucket, cls.bucketTarget, cls.bucketDelta);
+        } else if (inAmt > 0 && /보유현금|기보유|현금보관|기신고현금/.test(memo)) {
+          appState.settings.unbankedCash = Math.max(0, (appState.settings.unbankedCash || 0) - inAmt);
         }
 
         bucket.transactions.push({
@@ -2390,6 +2411,21 @@
       document.getElementById('inp-vat-rate').value = (rates.vatRate * 100).toFixed(1);
       document.getElementById('inp-income-tax-rate').value = (rates.incomeTaxRate * 100).toFixed(1);
       document.getElementById('inp-internal-kw').value = appState.settings.internalKeywords || '집금,내통장,내부,피부과';
+      const unbEl = document.getElementById('inp-unbanked-cash');
+      if (unbEl) unbEl.value = appState.settings.unbankedCash || 0;
+    }
+
+    function applyUnbankedCash() {
+      const inp = document.getElementById('inp-unbanked-cash');
+      const val = Math.max(0, Math.round(parseFloat(inp ? inp.value : '0') || 0));
+      appState.settings.unbankedCash = val;
+      safeSaveState();
+      renderAll(false);
+      const toast = document.getElementById('sim-toast');
+      if (toast) {
+        toast.textContent = '💵 미입금 보유현금 ' + fmtWon(val) + '이 1월~현재 누적 평가 및 세금 계산에 반영되었습니다.';
+        toast.classList.remove('hidden');
+      }
     }
 
     function saveInitialSettings() {
@@ -2872,10 +2908,16 @@
           if (ytdTitleEl && ytdBodyEl) {
             const incRangeLbl = activeMonthNum === 1 ? '1월' : ('1~' + activeMonthNum + '월');
             const vatRangeLbl = vatStartMonth === activeMonthNum ? (vatStartMonth + '월') : (vatStartMonth + '~' + activeMonthNum + '월');
-            const ytdOpProfit = ytdStats.rev - ytdStats.exp;
-            const ytdPreTax = ytdOpProfit - ytdStats.vat;
+            const isLatestMonth = activeYm === ymKeys[ymKeys.length - 1];
+            const unbanked = isLatestMonth ? Math.max(0, appState.settings.unbankedCash || 0) : 0;
+            const unbankedVat = Math.round(unbanked * vatRate);
+            const vatRevWithCash = vatStats.rev + unbanked;
+            const vatTotalWithCash = vatStats.vat + unbankedVat;
+            const ytdVatWithCash = ytdStats.vat + unbankedVat;
+            const ytdOpProfit = (ytdStats.rev + unbanked) - ytdStats.exp;
+            const ytdPreTax = ytdOpProfit - ytdVatWithCash;
             const ytdKr = calcKoreanIncomeTax(ytdPreTax);
-            const vatRemain = vatStats.vat - vatStats.prepaid;
+            const vatRemain = vatTotalWithCash - vatStats.prepaid;
             const incRemain = ytdKr.totalTax - ytdStats.incAdvance;
             ytdTitleEl.textContent = '🇰🇷 ' + activeYear + '년 ' + incRangeLbl + ' 세금 별도 적립·정산 (부가세 ' + (vatStartMonth === 7 ? '7월 0원 리셋' : '상반기 누적') + ' · 종소세 누적)';
             ytdBodyEl.innerHTML =
@@ -2885,7 +2927,7 @@
                   '<span class="font-mono font-bold text-sm ' + (vatRemain >= 0 ? 'text-[var(--warning)]' : 'text-[var(--success)]') + '">남은 적립금 ' + fmtWon(vatRemain) + '</span>' +
                 '</div>' +
                 '<div class="text-[11px] space-y-1 text-[var(--muted-foreground)]">' +
-                  '<div class="flex justify-between"><span>① ' + vatRangeLbl + ' 매출(' + fmtMan(vatStats.rev) + '원) × ' + (vatRate * 100).toFixed(1) + '%</span><span class="font-mono text-[var(--foreground)]">+' + fmtWon(vatStats.vat) + '</span></div>' +
+                  '<div class="flex justify-between"><span>① ' + vatRangeLbl + ' 매출(' + fmtMan(vatRevWithCash) + '원' + (unbanked > 0 ? ', 보유현금 포함' : '') + ') × ' + (vatRate * 100).toFixed(1) + '%</span><span class="font-mono text-[var(--foreground)]">+' + fmtWon(vatTotalWithCash) + '</span></div>' +
                   '<div class="flex justify-between"><span>② (-) ' + vatRangeLbl + ' 부가세 선납</span><span class="font-mono text-[var(--success)]">-' + fmtWon(vatStats.prepaid) + '</span></div>' +
                   '<div class="flex justify-between font-bold text-[var(--foreground)] border-t border-[var(--border)] pt-1"><span>(=) 남은 부가세 적립금</span><span class="font-mono text-[var(--warning)]">' + fmtWon(vatRemain) + '</span></div>' +
                   (vatStats.h1Settle > 0 ? '<div class="text-[10px] opacity-80">※ 7월 상반기 확정납부(' + fmtWon(vatStats.h1Settle) + ') 완료로 7월부터 0원 재시작</div>' : '') +
@@ -2897,7 +2939,7 @@
                   '<span class="font-mono font-bold text-sm ' + (incRemain > 0 ? 'text-[var(--warning)]' : 'text-[var(--success)]') + '">남은 예상세액 ' + fmtWon(Math.max(0, incRemain)) + '</span>' +
                 '</div>' +
                 '<div class="text-[11px] space-y-1 text-[var(--muted-foreground)]">' +
-                  '<div class="flex justify-between"><span>① ' + incRangeLbl + ' 영업순이익(' + fmtMan(ytdOpProfit) + ') - 부가세(' + fmtMan(ytdStats.vat) + ')</span><span class="font-mono text-[var(--foreground)]">순이익 ' + fmtMan(ytdPreTax) + '원</span></div>' +
+                  '<div class="flex justify-between"><span>① ' + incRangeLbl + ' 영업순이익(' + fmtMan(ytdOpProfit) + (unbanked > 0 ? ', 현금+' + fmtMan(unbanked) : '') + ') - 부가세(' + fmtMan(ytdVatWithCash) + ')</span><span class="font-mono text-[var(--foreground)]">순이익 ' + fmtMan(ytdPreTax) + '원</span></div>' +
                   '<div class="flex justify-between"><span>② 국내 누진세율(' + ytdKr.topRatePct + '% 구간 · 지방세 10% 포함)</span><span class="font-mono text-[var(--foreground)]">' + fmtWon(ytdKr.totalTax) + ' (' + ytdKr.effectiveRatePct + '%)</span></div>' +
                   '<div class="flex justify-between"><span>③ (-) 올해 종소세 선납</span><span class="font-mono text-[var(--success)]">-' + fmtWon(ytdStats.incAdvance) + '</span></div>' +
                   '<div class="flex justify-between font-bold text-[var(--foreground)] border-t border-[var(--border)] pt-1"><span>(=) 남은 예상 종합소득세</span><span class="font-mono text-[var(--warning)]">' + fmtWon(Math.max(0, incRemain)) + '</span></div>' +
@@ -3071,21 +3113,24 @@
         if (opProfit < worstProfit) { worstProfit = opProfit; worstYm = ym; }
       });
 
-      const totOpProfit = totRev - totExp;
-      const opMargin = ((totOpProfit / Math.max(1, totRev)) * 100).toFixed(1);
-      const payrollRatio = ((totPayroll / Math.max(1, totRev)) * 100).toFixed(1);
-      const fixedRatio = (((totPayroll + totRent + totLease) / Math.max(1, totRev)) * 100).toFixed(1);
-      const supplyCardRatio = (((totSupply + totCard) / Math.max(1, totRev)) * 100).toFixed(1);
-      const mktRatio = ((totMkt / Math.max(1, totRev)) * 100).toFixed(1);
-      const avgRev = Math.round(totRev / ymKeys.length);
+      const unbanked = Math.max(0, appState.settings.unbankedCash || 0);
+      const totRevAll = totRev + unbanked;
+      const totOpProfit = totRevAll - totExp;
+      const totalLiquidity = totalBankNow + unbanked;
+      const opMargin = ((totOpProfit / Math.max(1, totRevAll)) * 100).toFixed(1);
+      const payrollRatio = ((totPayroll / Math.max(1, totRevAll)) * 100).toFixed(1);
+      const fixedRatio = (((totPayroll + totRent + totLease) / Math.max(1, totRevAll)) * 100).toFixed(1);
+      const supplyCardRatio = (((totSupply + totCard) / Math.max(1, totRevAll)) * 100).toFixed(1);
+      const mktRatio = ((totMkt / Math.max(1, totRevAll)) * 100).toFixed(1);
+      const avgRev = Math.round(totRevAll / ymKeys.length);
 
-      if (badgeEl) badgeEl.textContent = ymKeys[0] + ' ~ ' + ymKeys[ymKeys.length - 1] + ' (' + ymKeys.length + '개월 누적)';
+      if (badgeEl) badgeEl.textContent = ymKeys[0] + ' ~ ' + ymKeys[ymKeys.length - 1] + ' (' + ymKeys.length + '개월 · 1월1일~현재 누적' + (unbanked > 0 ? ' · 보유현금 포함' : '') + ')';
 
       kpiEl.innerHTML =
-        '<div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]"><div class="text-[var(--muted-foreground)]">누적 총매출</div><div class="font-mono font-bold text-sm mt-0.5">' + fmtMan(totRev) + '원</div><div class="text-[11px] text-[var(--muted-foreground)]">월평균 ' + fmtMan(avgRev) + '원</div></div>' +
-        '<div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]"><div class="text-[var(--muted-foreground)]">누적 영업지출</div><div class="font-mono font-bold text-sm mt-0.5 text-[var(--error)]">-' + fmtMan(totExp) + '원</div><div class="text-[11px] text-[var(--muted-foreground)]">세금일시납 별도 ' + fmtMan(totTaxLump) + '원</div></div>' +
-        '<div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]"><div class="text-[var(--muted-foreground)]">누적 영업순이익</div><div class="font-mono font-bold text-sm mt-0.5 ' + (totOpProfit >= 0 ? 'text-[var(--success)]' : 'text-[var(--error)]') + '">' + (totOpProfit >= 0 ? '+' : '') + fmtMan(totOpProfit) + '원</div><div class="text-[11px] text-[var(--muted-foreground)]">영업이익률 ' + opMargin + '%</div></div>' +
-        '<div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--primary)]"><div class="text-[var(--muted-foreground)]">현재 2개통장 잔액</div><div class="font-mono font-bold text-sm mt-0.5 text-[var(--primary)]">' + fmtMan(totalBankNow) + '원</div><div class="text-[11px] text-[var(--muted-foreground)]">흑자 ' + surplusMonths + '개월 / 적자 ' + deficitMonths + '개월</div></div>';
+        '<div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]"><div class="text-[var(--muted-foreground)]">1/1~현재 총매출</div><div class="font-mono font-bold text-sm mt-0.5">' + fmtMan(totRevAll) + '원</div><div class="text-[11px] text-[var(--muted-foreground)]">월평균 ' + fmtMan(avgRev) + '원' + (unbanked > 0 ? ' (현금+' + fmtMan(unbanked) + ')' : '') + '</div></div>' +
+        '<div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]"><div class="text-[var(--muted-foreground)]">1/1~현재 영업지출</div><div class="font-mono font-bold text-sm mt-0.5 text-[var(--error)]">-' + fmtMan(totExp) + '원</div><div class="text-[11px] text-[var(--muted-foreground)]">세금일시납 별도 ' + fmtMan(totTaxLump) + '원</div></div>' +
+        '<div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]"><div class="text-[var(--muted-foreground)]">1/1~현재 영업순이익</div><div class="font-mono font-bold text-sm mt-0.5 ' + (totOpProfit >= 0 ? 'text-[var(--success)]' : 'text-[var(--error)]') + '">' + (totOpProfit >= 0 ? '+' : '') + fmtMan(totOpProfit) + '원</div><div class="text-[11px] text-[var(--muted-foreground)]">영업이익률 ' + opMargin + '%</div></div>' +
+        '<div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--primary)]"><div class="text-[var(--muted-foreground)]">현재 총 보유자금</div><div class="font-mono font-bold text-sm mt-0.5 text-[var(--primary)]">' + fmtMan(totalLiquidity) + '원</div><div class="text-[11px] text-[var(--muted-foreground)]">통장 ' + fmtMan(totalBankNow) + ' + 현금 ' + fmtMan(unbanked) + '</div></div>';
 
       const renderList = function(items) {
         return items.map(function(it, idx) {
@@ -3099,15 +3144,15 @@
       prosEl.innerHTML = renderList([
         {
           title: '안정적인 매출 규모 (월평균 ' + fmtMan(avgRev) + '원)',
-          desc: ymKeys.length + '개월 누적 매출 ' + fmtMan(totRev) + '원을 기록 중이며, ' + bestYm + '에는 최고 영업이익(+' + fmtMan(bestProfit) + '원)을 달성했습니다.'
+          desc: ymKeys.length + '개월 누적 매출 ' + fmtMan(totRevAll) + '원' + (unbanked > 0 ? '(미입금 현금 ' + fmtMan(unbanked) + '원 포함)' : '') + '을 기록 중이며, ' + bestYm + '에는 최고 영업이익(+' + fmtMan(bestProfit) + '원)을 달성했습니다.'
         },
         {
-          title: '누적 영업흑자 ' + fmtMan(totOpProfit) + '원 (이익률 ' + opMargin + '%)',
+          title: '1/1~현재 누적 영업흑자 ' + fmtMan(totOpProfit) + '원 (이익률 ' + opMargin + '%)',
           desc: '일시불 세금 납부(' + fmtMan(totTaxLump) + '원)를 분리한 순수 병원 영업 기준 ' + surplusMonths + '개월 흑자를 유지하고 있습니다.'
         },
         {
-          title: '충분한 유동성 현금 (' + fmtMan(totalBankNow) + '원 보유)',
-          desc: '우리·경남 2개 통장에 ' + fmtMan(totalBankNow) + '원 잔액을 확보하고 있어, 다가오는 부가세·종소세 및 20~25일 고정 출금 대응 여력이 양호합니다.'
+          title: '충분한 총 보유자금 (' + fmtMan(totalLiquidity) + '원 확보)',
+          desc: '우리·경남 통장(' + fmtMan(totalBankNow) + '원)' + (unbanked > 0 ? '과 미입금 보유현금(' + fmtMan(unbanked) + '원)' : '') + '을 합쳐 다가오는 부가세·종소세 및 20~25일 고정 출금 대응 여력이 양호합니다.'
         }
       ]);
 
