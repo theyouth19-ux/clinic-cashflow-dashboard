@@ -504,8 +504,8 @@
               <div id="pnl-mkt" class="font-mono font-bold text-sm mt-0.5 text-[var(--error)]">-2,664만</div>
             </div>
             <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
-              <div class="text-[var(--muted-foreground)]">④ 세금 적립충당</div>
-              <div id="pnl-tax" class="font-mono font-bold text-sm mt-0.5 text-[var(--warning)]">-819만</div>
+              <div class="text-[var(--muted-foreground)]">④ 마케팅·운영비(현금)</div>
+              <div id="pnl-tax" class="font-mono font-bold text-sm mt-0.5 text-[var(--error)]">-819만</div>
             </div>
           </div>
 
@@ -590,22 +590,8 @@
               </div>
               <span id="row-pnl-card23" class="font-mono font-bold text-[var(--error)] shrink-0">-9,720,000원</span>
             </div>
-            <div class="py-2 flex items-center justify-between gap-2">
-              <div class="truncate">
-                <span class="font-semibold">➖ 부가세 적립</span>
-                <span class="text-[var(--muted-foreground)] ml-1">(<span id="lbl-vat-rate">5.0</span>% · 매출기준)</span>
-              </div>
-              <span id="row-pnl-vat" class="font-mono font-bold text-[var(--warning)] shrink-0">-4,820,000원</span>
-            </div>
-            <div class="py-2 flex items-center justify-between gap-2">
-              <div class="truncate">
-                <span class="font-semibold">➖ 종소세 적립</span>
-                <span class="text-[var(--muted-foreground)] ml-1">(<span id="lbl-income-tax-rate">33.0</span>% · 순이익기준)</span>
-              </div>
-              <span id="row-pnl-incometax" class="font-mono font-bold text-[var(--warning)] shrink-0">-6,448,200원</span>
-            </div>
             <div class="pt-2.5 flex items-center justify-between gap-2 font-bold">
-              <span>🚩 24일 공식기준 실질 순이익</span>
+              <span>🚩 24일 공식기준 월 영업순이익 (세금 별도관리)</span>
               <span id="row-pnl-net" class="font-mono text-sm text-[var(--success)] shrink-0">+16,166,000원</span>
             </div>
           </div>
@@ -803,9 +789,8 @@
                   <th class="py-1.5">총유입</th>
                   <th class="py-1.5">고정비</th>
                   <th class="py-1.5">카드·기타</th>
-                  <th class="py-1.5">부가·종소적립</th>
                   <th class="py-1.5">일시납(부가·종소)</th>
-                  <th class="py-1.5">세후순이익</th>
+                  <th class="py-1.5">월 영업순이익</th>
                   <th class="py-1.5">월말잔액</th>
                 </tr>
               </thead>
@@ -1482,7 +1467,7 @@
       if (!appState.monthlyData[ym]) {
         appState.monthlyData[ym] = {
           inflowTotals: { pgCard: 0, wirelessCard: 0, cashHana: 0, platformKyongnam: 0, naverPay: 0, kakaoPay: 0 },
-          outflowTotals: { payroll: 0, lease: 0, taxInsRent: 0, taxLumpSum: 0, vatLumpSum: 0, incLumpSum: 0, rent: 0, supplyCard: 0, marketingCard: 0, welfareOtherCard: 0 },
+          outflowTotals: { payroll: 0, lease: 0, taxInsRent: 0, taxLumpSum: 0, vatLumpSum: 0, vatH1Settle: 0, incLumpSum: 0, incAdvance: 0, incPrevYear: 0, rent: 0, supplyCard: 0, marketingCard: 0, welfareOtherCard: 0 },
           cards: {
             card13: { currentMonthSwipes: 0, confirmedNextWithdraw: 0 },
             card14: { currentMonthSwipes: 0, confirmedNextWithdraw: 0 },
@@ -1700,9 +1685,16 @@
           sub = '5일 리스 출금';
         } else if (/부가세|종합소득세|종소세|절반선납/.test(memo)) {
           const isVatPay = /부가세|절반선납/.test(memo);
-          bucketTarget = isVatPay ? 'outflow.vatLumpSum' : 'outflow.incLumpSum';
-          badge = isVatPay ? '🏦 부가세 납부(일시납)' : '🏦 종합소득세 납부(일시납)';
-          sub = '월 영업경비 제외 (누적 세금정산 반영)';
+          if (isVatPay) {
+            const isH1Settle = /상반기/.test(memo);
+            bucketTarget = isH1Settle ? 'outflow.vatH1Settle' : 'outflow.vatLumpSum';
+            badge = isH1Settle ? '🏦 상반기 부가세 확정납부' : '🏦 부가세 선납(예정납부)';
+          } else {
+            const isAdvance = /선납|예납/.test(memo);
+            bucketTarget = isAdvance ? 'outflow.incAdvance' : 'outflow.incPrevYear';
+            badge = isAdvance ? '🏦 종합소득세 선납' : '🏦 전년도 종합소득세 납부';
+          }
+          sub = '월 영업경비 제외 (하단 세금정산에 자동 반영)';
         } else if (/국고|서울특징|경기파주시|국민연금|건강보험|고용보험|산재보험|원천세|종소세|부가세|지방세|재산세|유어택스|세금|세무/i.test(combined)) {
           bucketTarget = 'outflow.taxInsRent';
           badge = '🏛️ 세금·4대보험';
@@ -2664,9 +2656,10 @@
 
       const fixedCosts = (vOut.payroll || 0) + (vOut.lease || 0) + (vOut.taxInsRent || 0) + (vOut.rent || 0);
       const variableAndCardCosts = totalCardSwipes + cashSupply20 + (vOut.marketingCard || 0) + (vOut.welfareOtherCard || 0);
+      const cashOperatingOther = (vOut.marketingCard || 0) + (vOut.welfareOtherCard || 0);
       const taxCalc = calcTaxes(totalInflow, fixedCosts + variableAndCardCosts, appState.settings);
       const taxReserve = taxCalc.totalTaxReserve;
-      const netProfitCur = taxCalc.netProfit;
+      const netProfitCur = totalInflow - (fixedCosts + variableAndCardCosts);
       const marginCur = ((netProfitCur / Math.max(1, totalInflow)) * 100).toFixed(1) + '%';
 
       const totalSupplyCost = (vOut.supplyCard || 0) + cashSupply20;
@@ -2712,8 +2705,6 @@
       document.getElementById('sb-profit').textContent = (netProfitCur >= 0 ? '+' : '') + fmtWon(netProfitCur);
 
       document.getElementById('bep-target-lbl').textContent = fmtMan(calculatedBep);
-      document.getElementById('lbl-vat-rate').textContent = (taxCalc.vatRate * 100).toFixed(1);
-      document.getElementById('lbl-income-tax-rate').textContent = (taxCalc.incomeTaxRate * 100).toFixed(1);
 
       const selectedMonth = document.getElementById('pnl-month-select').value;
       if (view.isMonthly || selectedMonth === 'cur') {
@@ -2745,8 +2736,8 @@
 
         document.getElementById('pnl-rev').textContent = '+' + fmtMan(totalInflow);
         document.getElementById('pnl-cost').textContent = '-' + fmtMan(fixedCosts);
-        document.getElementById('pnl-mkt').textContent = '-' + fmtMan(variableAndCardCosts);
-        document.getElementById('pnl-tax').textContent = '-' + fmtMan(taxReserve);
+        document.getElementById('pnl-mkt').textContent = '-' + fmtMan(totalCardSwipes + cashSupply20);
+        document.getElementById('pnl-tax').textContent = '-' + fmtMan(cashOperatingOther);
 
         const bepRatio = Math.min(100, (totalInflow / Math.max(1, calculatedBep)) * 100).toFixed(1);
         document.getElementById('bep-pct').textContent = bepRatio >= 100 ? '돌파 완료 (' + ((totalInflow / Math.max(1, calculatedBep)) * 100).toFixed(0) + '%)' : bepRatio + '% 달성';
@@ -2761,8 +2752,6 @@
         document.getElementById('row-pnl-card14').textContent = '-' + fmtWon(card14Swipes);
         document.getElementById('row-pnl-supplycash').textContent = '-' + fmtWon(cashSupply20);
         document.getElementById('row-pnl-card23').textContent = '-' + fmtWon(card23Swipes);
-        document.getElementById('row-pnl-vat').textContent = '-' + fmtWon(taxCalc.vatReserve);
-        document.getElementById('row-pnl-incometax').textContent = '-' + fmtWon(taxCalc.incomeTaxReserve);
         document.getElementById('row-pnl-net').textContent = (netProfitCur >= 0 ? '+' : '') + fmtWon(netProfitCur);
       } else if (selectedMonth === 'prev1') {
         if (appState.settings && appState.settings.realDataMode) {
@@ -2880,7 +2869,7 @@
       if (compBody) {
         const ymKeys = Object.keys(appState.monthlyData || {}).sort();
         if (!ymKeys.length) {
-          compBody.innerHTML = '<tr><td colspan="8" class="py-3 text-center text-[var(--muted-foreground)]">엑셀 파일을 올리시면 월별 비교표가 자동 생성됩니다.</td></tr>';
+          compBody.innerHTML = '<tr><td colspan="7" class="py-3 text-center text-[var(--muted-foreground)]">엑셀 파일을 올리시면 월별 비교표가 자동 생성됩니다.</td></tr>';
           if (taxSummaryGrid) {
             taxSummaryGrid.innerHTML = '<div class="p-3 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--muted-foreground)] md:col-span-3">엑셀 업로드 시 상반기·하반기·연간 합산 세금이 자동 계산됩니다.</div>';
           }
@@ -2892,7 +2881,9 @@
           const activeYm = view.isMonthly ? view.ym : ymKeys[ymKeys.length - 1];
           const activeYear = activeYm.slice(0, 4);
           const activeMonthNum = parseInt(activeYm.slice(5, 7), 10) || 12;
-          const ytdStats = { rev: 0, exp: 0, vat: 0, vatPaid: 0, incPaid: 0, lump: 0, months: 0 };
+          const vatStartMonth = activeMonthNum >= 7 ? 7 : 1;
+          const ytdStats = { rev: 0, exp: 0, vat: 0, incAdvance: 0, incPrevYear: 0, lump: 0, months: 0 };
+          const vatStats = { rev: 0, vat: 0, prepaid: 0, h1Settle: 0 };
           const periodStats = {
             h1: { label: '📅 상반기 (1~6월)', rev: 0, exp: 0, vat: 0, lump: 0, months: 0 },
             h2: { label: '📅 하반기 (7~12월 누적)', rev: 0, exp: 0, vat: 0, lump: 0, months: 0 },
@@ -2908,24 +2899,33 @@
             const fix = (mOut.payroll || 0) + (mOut.lease || 0) + (mOut.taxInsRent || 0) + (mOut.rent || 0);
             const cardTotal = ((mC.card13 && mC.card13.currentMonthSwipes) || 0) + ((mC.card14 && mC.card14.currentMonthSwipes) || 0) + ((mC.card23 && mC.card23.currentMonthSwipes) || 0);
             const varCost = cardTotal + (mC.scheduledSupplyTransfer20 || 0) + (mOut.marketingCard || 0) + (mOut.welfareOtherCard || 0);
-            const vatPaid = mOut.vatLumpSum || 0;
-            const incPaid = mOut.incLumpSum || 0;
-            const lump = vatPaid + incPaid + (mOut.taxLumpSum || 0);
-            const tc = calcTaxes(rev, fix + varCost, appState.settings);
+            const vatPrepaid = mOut.vatLumpSum || 0;
+            const vatH1Settle = mOut.vatH1Settle || 0;
+            const incAdvance = mOut.incAdvance || 0;
+            const incPrevYear = mOut.incPrevYear || 0;
+            const lump = vatPrepaid + vatH1Settle + incAdvance + incPrevYear + (mOut.incLumpSum || 0) + (mOut.taxLumpSum || 0);
+            const monthlyOpProfit = rev - (fix + varCost);
             const ebW = (mD.endBalances && mD.endBalances.woori !== null) ? mD.endBalances.woori : 0;
             const ebK = (mD.endBalances && mD.endBalances.kyongnam !== null) ? mD.endBalances.kyongnam : 0;
             const isSel = view.isMonthly && view.ym === ym ? ' bg-[var(--secondary)] font-bold' : '';
-            const netCls = tc.netProfit >= 0 ? 'text-[var(--success)]' : 'text-[var(--error)]';
+            const netCls = monthlyOpProfit >= 0 ? 'text-[var(--success)]' : 'text-[var(--error)]';
 
             const mNum = parseInt(ym.slice(5, 7), 10) || 0;
             if (ym.slice(0, 4) === activeYear && mNum <= activeMonthNum) {
               ytdStats.rev += rev;
               ytdStats.exp += (fix + varCost);
               ytdStats.vat += Math.round(rev * vatRate);
-              ytdStats.vatPaid += vatPaid;
-              ytdStats.incPaid += incPaid;
+              ytdStats.incAdvance += incAdvance;
+              ytdStats.incPrevYear += incPrevYear;
               ytdStats.lump += lump;
               ytdStats.months += 1;
+
+              if (mNum >= vatStartMonth) {
+                vatStats.rev += rev;
+                vatStats.vat += Math.round(rev * vatRate);
+                vatStats.prepaid += vatPrepaid;
+                vatStats.h1Settle += vatH1Settle;
+              }
             }
             const bucketKey = mNum <= 6 ? 'h1' : 'h2';
             [bucketKey, 'yr'].forEach(function(pk) {
@@ -2941,39 +2941,45 @@
               '<td class="py-1.5">' + fmtMan(rev) + '</td>' +
               '<td class="py-1.5 text-[var(--error)]">-' + fmtMan(fix) + '</td>' +
               '<td class="py-1.5 text-[var(--error)]">-' + fmtMan(varCost) + '</td>' +
-              '<td class="py-1.5 text-[var(--warning)]">-' + fmtMan(tc.totalTaxReserve) + '</td>' +
               '<td class="py-1.5 text-[var(--muted-foreground)]">' + (lump > 0 ? '-' + fmtMan(lump) : '-') + '</td>' +
-              '<td class="py-1.5 font-bold ' + netCls + '">' + (tc.netProfit >= 0 ? '+' : '-') + fmtMan(tc.netProfit) + '</td>' +
+              '<td class="py-1.5 font-bold ' + netCls + '">' + (monthlyOpProfit >= 0 ? '+' : '-') + fmtMan(monthlyOpProfit) + '</td>' +
               '<td class="py-1.5 text-[var(--primary)]">' + fmtMan(ebW + ebK) + '</td>' +
             '</tr>';
           }).join('');
 
           if (ytdTitleEl && ytdBodyEl) {
-            const rangeLbl = activeMonthNum === 1 ? '1월' : ('1~' + activeMonthNum + '월');
-            const ytdPreTax = ytdStats.rev - ytdStats.exp - ytdStats.vat;
+            const incRangeLbl = activeMonthNum === 1 ? '1월' : ('1~' + activeMonthNum + '월');
+            const vatRangeLbl = vatStartMonth === activeMonthNum ? (vatStartMonth + '월') : (vatStartMonth + '~' + activeMonthNum + '월');
+            const ytdOpProfit = ytdStats.rev - ytdStats.exp;
+            const ytdPreTax = ytdOpProfit - ytdStats.vat;
             const ytdKr = calcKoreanIncomeTax(ytdPreTax);
-            const ytdVatRemain = ytdStats.vat - ytdStats.vatPaid;
-            const ytdIncRemain = ytdKr.totalTax - ytdStats.incPaid;
-            ytdTitleEl.textContent = '🇰🇷 ' + activeYear + '년 ' + rangeLbl + ' 누적 부가세 적립 & 국내 세법 예상 종합소득세';
+            const vatRemain = vatStats.vat - vatStats.prepaid;
+            const incRemain = ytdKr.totalTax - ytdStats.incAdvance;
+            ytdTitleEl.textContent = '🇰🇷 ' + activeYear + '년 ' + incRangeLbl + ' 세금 별도 적립·정산 (부가세 ' + (vatStartMonth === 7 ? '7월 0원 리셋' : '상반기 누적') + ' · 종소세 누적)';
             ytdBodyEl.innerHTML =
-              '<div class="p-3 rounded-lg bg-[var(--background)] border border-[var(--border)] space-y-1.5">' +
-                '<div class="flex items-center justify-between">' +
-                  '<span class="font-bold text-[var(--warning)]">🧾 ' + rangeLbl + ' 부가세 적립액 (' + (vatRate * 100).toFixed(1) + '%)</span>' +
-                  '<span class="font-mono font-bold text-sm text-[var(--warning)]">' + fmtWon(ytdStats.vat) + '</span>' +
+              '<div class="p-3.5 rounded-lg bg-[var(--background)] border border-[var(--border)] space-y-1.5">' +
+                '<div class="flex items-center justify-between border-b border-[var(--border)] pb-1.5">' +
+                  '<span class="font-bold text-[var(--warning)]">🧾 ' + vatRangeLbl + ' 부가세 적립 계산</span>' +
+                  '<span class="font-mono font-bold text-sm ' + (vatRemain >= 0 ? 'text-[var(--warning)]' : 'text-[var(--success)]') + '">남은 적립금 ' + fmtWon(vatRemain) + '</span>' +
                 '</div>' +
-                '<div class="text-[11px] text-[var(--muted-foreground)] flex justify-between">' +
-                  '<span>' + rangeLbl + ' 총 매출 ' + fmtMan(ytdStats.rev) + '원 기준</span>' +
-                  '<span>기납부 -' + fmtMan(ytdStats.vatPaid) + '원 · 잔여 ' + fmtMan(ytdVatRemain) + '원</span>' +
+                '<div class="text-[11px] space-y-1 text-[var(--muted-foreground)]">' +
+                  '<div class="flex justify-between"><span>① ' + vatRangeLbl + ' 매출(' + fmtMan(vatStats.rev) + '원) × ' + (vatRate * 100).toFixed(1) + '%</span><span class="font-mono text-[var(--foreground)]">+' + fmtWon(vatStats.vat) + '</span></div>' +
+                  '<div class="flex justify-between"><span>② (-) ' + vatRangeLbl + ' 부가세 선납</span><span class="font-mono text-[var(--success)]">-' + fmtWon(vatStats.prepaid) + '</span></div>' +
+                  '<div class="flex justify-between font-bold text-[var(--foreground)] border-t border-[var(--border)] pt-1"><span>(=) 남은 부가세 적립금</span><span class="font-mono text-[var(--warning)]">' + fmtWon(vatRemain) + '</span></div>' +
+                  (vatStats.h1Settle > 0 ? '<div class="text-[10px] opacity-80">※ 7월 상반기 확정납부(' + fmtWon(vatStats.h1Settle) + ') 완료로 7월부터 0원 재시작</div>' : '') +
                 '</div>' +
               '</div>' +
-              '<div class="p-3 rounded-lg bg-[var(--background)] border border-[var(--primary)] space-y-1.5">' +
-                '<div class="flex items-center justify-between">' +
-                  '<span class="font-bold text-[var(--primary)]">🏛️ ' + rangeLbl + ' 예상 종합소득세 (지방세 포함)</span>' +
-                  '<span class="font-mono font-bold text-sm text-[var(--warning)]">' + fmtWon(ytdKr.totalTax) + ' <span class="text-xs">(' + ytdKr.effectiveRatePct + '%)</span></span>' +
+              '<div class="p-3.5 rounded-lg bg-[var(--background)] border border-[var(--primary)] space-y-1.5">' +
+                '<div class="flex items-center justify-between border-b border-[var(--border)] pb-1.5">' +
+                  '<span class="font-bold text-[var(--primary)]">🏛️ ' + incRangeLbl + ' 예상 종합소득세 (' + ytdKr.effectiveRatePct + '%)</span>' +
+                  '<span class="font-mono font-bold text-sm ' + (incRemain > 0 ? 'text-[var(--warning)]' : 'text-[var(--success)]') + '">남은 예상세액 ' + fmtWon(Math.max(0, incRemain)) + '</span>' +
                 '</div>' +
-                '<div class="text-[11px] text-[var(--muted-foreground)] flex justify-between">' +
-                  '<span>총 순이익 ' + fmtMan(ytdPreTax) + '원 기준 (' + ytdKr.topRatePct + '% 구간)</span>' +
-                  '<span>기납부 -' + fmtMan(ytdStats.incPaid) + '원 · 대비 ' + fmtMan(Math.max(0, ytdIncRemain)) + '원</span>' +
+                '<div class="text-[11px] space-y-1 text-[var(--muted-foreground)]">' +
+                  '<div class="flex justify-between"><span>① ' + incRangeLbl + ' 영업순이익(' + fmtMan(ytdOpProfit) + ') - 부가세(' + fmtMan(ytdStats.vat) + ')</span><span class="font-mono text-[var(--foreground)]">순이익 ' + fmtMan(ytdPreTax) + '원</span></div>' +
+                  '<div class="flex justify-between"><span>② 국내 누진세율(' + ytdKr.topRatePct + '% 구간 · 지방세 10% 포함)</span><span class="font-mono text-[var(--foreground)]">' + fmtWon(ytdKr.totalTax) + ' (' + ytdKr.effectiveRatePct + '%)</span></div>' +
+                  '<div class="flex justify-between"><span>③ (-) 올해 종소세 선납</span><span class="font-mono text-[var(--success)]">-' + fmtWon(ytdStats.incAdvance) + '</span></div>' +
+                  '<div class="flex justify-between font-bold text-[var(--foreground)] border-t border-[var(--border)] pt-1"><span>(=) 남은 예상 종합소득세</span><span class="font-mono text-[var(--warning)]">' + fmtWon(Math.max(0, incRemain)) + '</span></div>' +
+                  (ytdStats.incPrevYear > 0 ? '<div class="text-[10px] opacity-80">※ 6월 전년도 종소세 납부(' + fmtWon(ytdStats.incPrevYear) + ')는 전년도 귀속으로 별도</div>' : '') +
                 '</div>' +
               '</div>';
           }
