@@ -428,16 +428,6 @@
           <div class="font-bold mt-0.5">손익</div>
           <div class="only-unfolded text-xs opacity-80 font-normal">1일~말일 결산</div>
         </button>
-        <button type="button" id="tab-btn-snapshot" onclick="switchTab('snapshot')" class="py-2 px-1 rounded-lg text-xs text-center transition hover:bg-[var(--secondary)]">
-          <div class="text-sm">📍</div>
-          <div class="font-bold mt-0.5">시점</div>
-          <div class="only-unfolded text-xs opacity-80 font-normal">잔액·가용현금</div>
-        </button>
-        <button type="button" id="tab-btn-credit" onclick="switchTab('credit')" class="py-2 px-1 rounded-lg text-xs text-center transition hover:bg-[var(--secondary)]">
-          <div class="text-sm">💳</div>
-          <div class="font-bold mt-0.5">카드</div>
-          <div class="only-unfolded text-xs opacity-80 font-normal">13·14·23일출금</div>
-        </button>
         <button type="button" id="tab-btn-period" onclick="switchTab('period')" class="py-2 px-1 rounded-lg text-xs text-center transition hover:bg-[var(--secondary)]">
           <div class="text-sm">📅</div>
           <div class="font-bold mt-0.5">기간</div>
@@ -447,6 +437,16 @@
           <div class="text-sm">📊</div>
           <div class="font-bold mt-0.5">항목</div>
           <div class="only-unfolded text-xs opacity-80 font-normal">PG분해·지출</div>
+        </button>
+        <button type="button" id="tab-btn-credit" onclick="switchTab('credit')" class="py-2 px-1 rounded-lg text-xs text-center transition hover:bg-[var(--secondary)]">
+          <div class="text-sm">💳</div>
+          <div class="font-bold mt-0.5">카드</div>
+          <div class="only-unfolded text-xs opacity-80 font-normal">13·14·23일출금</div>
+        </button>
+        <button type="button" id="tab-btn-review" onclick="switchTab('review')" class="py-2 px-1 rounded-lg text-xs text-center transition hover:bg-[var(--secondary)]">
+          <div class="text-sm">🩺</div>
+          <div class="font-bold mt-0.5">평가</div>
+          <div class="only-unfolded text-xs opacity-80 font-normal">경영진단·개선</div>
         </button>
       </div>
 
@@ -611,75 +611,7 @@
         </div>
       </div>
 
-      <!-- TAB 2: 📍 시점 -->
-      <div id="tab-snapshot" class="space-y-3.5 hidden">
-        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3 space-y-2">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-bold">⏱️ 조회 기준 시점</span>
-            <span id="snap-updated-at" class="text-xs text-[var(--muted-foreground)]">실시간 동기화</span>
-          </div>
-          <select id="snapshot-select" onchange="renderAll()" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs font-semibold">
-            <option value="now">현재 기준 요약 (업로드된 최신 잔액 반영)</option>
-            <option value="day24_prev1">전월 24일 공식 기준일 (23일 경남카드 출금 완료 직후)</option>
-            <option value="day24_prev2">전전월 24일 공식 기준일 (모든 출금 완료 직후)</option>
-          </select>
-        </div>
-
-        <div class="grid grid-cols-2 md:grid-cols-4 fold-cols-2 gap-2.5">
-          <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3">
-            <div class="text-xs text-[var(--muted-foreground)]">① 2개통장 총잔액</div>
-            <div id="snap-total-bank" class="text-base font-bold font-mono mt-1">6,562만 원</div>
-            <div class="text-xs text-[var(--muted-foreground)] mt-0.5">우리+경남 합산</div>
-          </div>
-          <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3">
-            <div class="text-xs text-[var(--muted-foreground)]">➕ ② 받을 정산금</div>
-            <div id="snap-pending-in" class="text-base font-bold font-mono mt-1 text-[var(--success)]">+1,945만 원</div>
-            <div class="text-xs text-[var(--muted-foreground)] mt-0.5">갤럭시아(D+1/D+3)</div>
-          </div>
-          <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3 cursor-pointer" onclick="switchTab('credit')">
-            <div class="text-xs text-[var(--muted-foreground)]">➖ ③ 나갈 카드·재료</div>
-            <div id="snap-pending-card" class="text-base font-bold font-mono mt-1 text-[var(--error)]">-3,804만 원</div>
-            <div class="text-xs text-[var(--link)] mt-0.5">13·14·20·23일 ➔</div>
-          </div>
-          <div class="bg-[var(--card)] border-2 border-[var(--primary)] rounded-xl p-3">
-            <div class="text-xs font-bold">💡 ④ 실질 가용현금</div>
-            <div id="snap-real-cash" class="text-base font-bold font-mono mt-1">4,703만 원</div>
-            <div class="text-xs text-[var(--muted-foreground)] mt-0.5">① + ② - ③ 여유액</div>
-          </div>
-        </div>
-
-        <div class="grid grid-cols-1 lg:grid-cols-2 fold-cols-1 gap-3">
-          <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3.5 space-y-2">
-            <div class="flex items-center justify-between">
-              <div>
-                <span class="text-xs px-1.5 py-0.5 rounded bg-[var(--secondary)] font-semibold">팝빌 연동 · PG/카드/현금직접입금 · 전체출금</span>
-                <h3 class="font-bold text-sm mt-1">🟦 우리은행 (1005-104-863854)</h3>
-              </div>
-              <div id="snap-woori" class="text-base font-bold font-mono">52,180,000원</div>
-            </div>
-            <div class="p-2 rounded-lg bg-[var(--secondary)] text-xs flex items-center justify-between">
-              <span>⚠️ 20일 재료비·23일 경남카드 대기</span>
-              <span id="snap-woori-upcoming" class="font-mono font-bold text-[var(--error)]">-19,400,000원</span>
-            </div>
-          </div>
-
-          <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3.5 space-y-2">
-            <div class="flex items-center justify-between">
-              <div>
-                <span class="text-xs px-1.5 py-0.5 rounded bg-[var(--secondary)] font-semibold">팝빌 연동 · 단말기PG · 강남언니·언니가이드</span>
-                <h3 class="font-bold text-sm mt-1">🟧 경남은행 (207-0172-8715-04)</h3>
-              </div>
-              <div id="snap-kyongnam" class="text-base font-bold font-mono">13,440,000원</div>
-            </div>
-            <div class="p-2 rounded-lg bg-[var(--secondary)] text-xs flex items-center justify-between">
-              <span>💄 갤럭시아(일부단말기) + 미용플랫폼 정산</span>
-              <span class="font-mono font-bold text-[var(--success)]">2개통장 연동</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- TAB 3: 💳 카드 (13일 삼성 / 14일 국민·우리·신한·롯데 / 23일 경남 + 20일 현금재료비) -->
+      <!-- TAB 4: 💳 카드 (13일 삼성 / 14일 국민·우리·신한·롯데 / 23일 경남 + 20일 현금재료비) -->
       <div id="tab-credit" class="space-y-3.5 hidden">
         <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3 space-y-1">
           <div class="flex items-center justify-between">
@@ -838,6 +770,40 @@
               <span id="cat-out-total" class="font-mono font-bold text-xs">72,040,000원</span>
             </div>
             <div id="cat-out-bars" class="space-y-2 text-xs"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 5: 🩺 평가 (매출·비용·현금흐름 종합 진단) -->
+      <div id="tab-review" class="space-y-3.5 hidden">
+        <div class="bg-[var(--card)] border border-[var(--primary)] rounded-xl p-3.5 space-y-2.5">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <h2 class="font-bold text-xs text-[var(--primary)]">🩺 병원 재무·현금흐름 종합 평가 (누적 실데이터 기반)</h2>
+            <span id="review-period-badge" class="text-[11px] text-[var(--muted-foreground)]">업로드된 전체 월 기준</span>
+          </div>
+          <div id="review-kpi-grid" class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs"></div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 text-xs">
+          <div class="bg-[var(--card)] border-2 border-[var(--success)] rounded-xl p-3.5 space-y-2.5">
+            <div class="font-bold text-sm text-[var(--success)] border-b border-[var(--card-border)] pb-2">
+              ✅ 긍정적인 면 (3가지)
+            </div>
+            <div id="review-pros" class="space-y-2.5"></div>
+          </div>
+
+          <div class="bg-[var(--card)] border-2 border-[var(--error)] rounded-xl p-3.5 space-y-2.5">
+            <div class="font-bold text-sm text-[var(--error)] border-b border-[var(--card-border)] pb-2">
+              ⚠️ 부정적인 면 (3가지)
+            </div>
+            <div id="review-cons" class="space-y-2.5"></div>
+          </div>
+
+          <div class="bg-[var(--card)] border-2 border-[var(--warning)] rounded-xl p-3.5 space-y-2.5">
+            <div class="font-bold text-sm text-[var(--warning)] border-b border-[var(--card-border)] pb-2">
+              🛠️ 고쳐야 할 점 (3가지)
+            </div>
+            <div id="review-actions" class="space-y-2.5"></div>
           </div>
         </div>
       </div>
@@ -2799,50 +2765,6 @@
         }
       }
 
-      const snapMode = document.getElementById('snapshot-select').value;
-      document.getElementById('snap-updated-at').textContent = appState.balances.updatedAt;
-      if (snapMode === 'now') {
-        document.getElementById('snap-total-bank').textContent = fmtMan(totalBankNow) + ' 원';
-        document.getElementById('snap-pending-in').textContent = '+' + fmtMan(pendingInTotal) + ' 원';
-        document.getElementById('snap-pending-card').textContent = '-' + fmtMan(pendingOutTotal) + ' 원';
-        document.getElementById('snap-real-cash').textContent = fmtMan(realCashNow) + ' 원';
-        document.getElementById('snap-woori').textContent = fmtWon(appState.balances.woori);
-        document.getElementById('snap-kyongnam').textContent = fmtWon(appState.balances.kyongnam);
-        document.getElementById('snap-woori-upcoming').textContent = '-' + fmtWon(confirmedCard23 + cashSupply20);
-      } else if (snapMode === 'day24_prev1') {
-        if (appState.settings && appState.settings.realDataMode) {
-          document.getElementById('snap-total-bank').textContent = '0만 원';
-          document.getElementById('snap-pending-in').textContent = '0만 원';
-          document.getElementById('snap-pending-card').textContent = '0만 원';
-          document.getElementById('snap-real-cash').textContent = '0만 원';
-          document.getElementById('snap-woori').textContent = '0원';
-          document.getElementById('snap-kyongnam').textContent = '0원';
-        } else {
-          document.getElementById('snap-total-bank').textContent = '6,400만 원';
-          document.getElementById('snap-pending-in').textContent = '+1,540만 원';
-          document.getElementById('snap-pending-card').textContent = '-620만 원';
-          document.getElementById('snap-real-cash').textContent = '7,320만 원';
-          document.getElementById('snap-woori').textContent = '50,900,000원';
-          document.getElementById('snap-kyongnam').textContent = '13,100,000원';
-        }
-      } else {
-        if (appState.settings && appState.settings.realDataMode) {
-          document.getElementById('snap-total-bank').textContent = '0만 원';
-          document.getElementById('snap-pending-in').textContent = '0만 원';
-          document.getElementById('snap-pending-card').textContent = '0만 원';
-          document.getElementById('snap-real-cash').textContent = '0만 원';
-          document.getElementById('snap-woori').textContent = '0원';
-          document.getElementById('snap-kyongnam').textContent = '0원';
-        } else {
-          document.getElementById('snap-total-bank').textContent = '3,710만 원';
-          document.getElementById('snap-pending-in').textContent = '+1,410만 원';
-          document.getElementById('snap-pending-card').textContent = '-490만 원';
-          document.getElementById('snap-real-cash').textContent = '4,630만 원';
-          document.getElementById('snap-woori').textContent = '28,800,000원';
-          document.getElementById('snap-kyongnam').textContent = '8,300,000원';
-        }
-      }
-
       document.getElementById('card13-cur-swipes').textContent = fmtWon(card13Swipes);
       document.getElementById('card14-cur-swipes').textContent = fmtWon(card14Swipes);
       document.getElementById('card23-cur-swipes').textContent = fmtWon(card23Swipes);
@@ -3087,6 +3009,7 @@
         '</div>';
       }).join('');
 
+      renderClinicReview(totalBankNow);
       runWhatIfSim();
 
       if (flash) {
@@ -3094,8 +3017,135 @@
       }
     }
 
+    function renderClinicReview(totalBankNow) {
+      const kpiEl = document.getElementById('review-kpi-grid');
+      const prosEl = document.getElementById('review-pros');
+      const consEl = document.getElementById('review-cons');
+      const actEl = document.getElementById('review-actions');
+      const badgeEl = document.getElementById('review-period-badge');
+      if (!kpiEl || !prosEl || !consEl || !actEl) return;
+
+      const ymKeys = Object.keys(appState.monthlyData || {}).sort();
+      if (!ymKeys.length) {
+        kpiEl.innerHTML = '<div class="col-span-4 p-3 rounded-lg bg-[var(--background)] text-[var(--muted-foreground)]">엑셀 파일을 업로드하시면 누적 매출·비용·현금흐름 기반 자동 진단이 표시됩니다.</div>';
+        prosEl.innerHTML = '<div class="text-[var(--muted-foreground)]">데이터 업로드 대기 중</div>';
+        consEl.innerHTML = '<div class="text-[var(--muted-foreground)]">데이터 업로드 대기 중</div>';
+        actEl.innerHTML = '<div class="text-[var(--muted-foreground)]">데이터 업로드 대기 중</div>';
+        return;
+      }
+
+      let totRev = 0, totExp = 0, totPayroll = 0, totRent = 0, totLease = 0, totSupply = 0, totMkt = 0, totCard = 0, totWelfare = 0;
+      let totTaxLump = 0, totUncertain = 0, surplusMonths = 0, deficitMonths = 0;
+      let bestYm = ymKeys[0], bestProfit = -Infinity, worstYm = ymKeys[0], worstProfit = Infinity;
+
+      ymKeys.forEach(function(ym) {
+        const mD = appState.monthlyData[ym];
+        const mInf = mD.inflowTotals;
+        const mOut = mD.outflowTotals;
+        const mC = mD.cards;
+        const rev = mInf.pgCard + mInf.wirelessCard + mInf.cashHana + mInf.platformKyongnam + mInf.naverPay + mInf.kakaoPay;
+        const payroll = mOut.payroll || 0;
+        const rent = mOut.rent || 0;
+        const lease = mOut.lease || 0;
+        const taxIns = mOut.taxInsRent || 0;
+        const card = ((mC.card13 && mC.card13.currentMonthSwipes) || 0) + ((mC.card14 && mC.card14.currentMonthSwipes) || 0) + ((mC.card23 && mC.card23.currentMonthSwipes) || 0);
+        const supply = mC.scheduledSupplyTransfer20 || 0;
+        const mkt = mOut.marketingCard || 0;
+        const welfare = mOut.welfareOtherCard || 0;
+        const exp = payroll + rent + lease + taxIns + card + supply + mkt + welfare;
+        const opProfit = rev - exp;
+
+        totRev += rev;
+        totExp += exp;
+        totPayroll += payroll;
+        totRent += rent;
+        totLease += lease;
+        totSupply += supply;
+        totMkt += mkt;
+        totCard += card;
+        totWelfare += welfare;
+        totTaxLump += (mOut.vatLumpSum || 0) + (mOut.vatH1Settle || 0) + (mOut.incAdvance || 0) + (mOut.incPrevYear || 0) + (mOut.incLumpSum || 0) + (mOut.taxLumpSum || 0);
+        totUncertain += (mD.transactions || []).filter(function(t) { return t.isUncertain; }).length;
+        if (opProfit >= 0) surplusMonths += 1; else deficitMonths += 1;
+        if (opProfit > bestProfit) { bestProfit = opProfit; bestYm = ym; }
+        if (opProfit < worstProfit) { worstProfit = opProfit; worstYm = ym; }
+      });
+
+      const totOpProfit = totRev - totExp;
+      const opMargin = ((totOpProfit / Math.max(1, totRev)) * 100).toFixed(1);
+      const payrollRatio = ((totPayroll / Math.max(1, totRev)) * 100).toFixed(1);
+      const fixedRatio = (((totPayroll + totRent + totLease) / Math.max(1, totRev)) * 100).toFixed(1);
+      const supplyCardRatio = (((totSupply + totCard) / Math.max(1, totRev)) * 100).toFixed(1);
+      const mktRatio = ((totMkt / Math.max(1, totRev)) * 100).toFixed(1);
+      const avgRev = Math.round(totRev / ymKeys.length);
+
+      if (badgeEl) badgeEl.textContent = ymKeys[0] + ' ~ ' + ymKeys[ymKeys.length - 1] + ' (' + ymKeys.length + '개월 누적)';
+
+      kpiEl.innerHTML =
+        '<div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]"><div class="text-[var(--muted-foreground)]">누적 총매출</div><div class="font-mono font-bold text-sm mt-0.5">' + fmtMan(totRev) + '원</div><div class="text-[11px] text-[var(--muted-foreground)]">월평균 ' + fmtMan(avgRev) + '원</div></div>' +
+        '<div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]"><div class="text-[var(--muted-foreground)]">누적 영업지출</div><div class="font-mono font-bold text-sm mt-0.5 text-[var(--error)]">-' + fmtMan(totExp) + '원</div><div class="text-[11px] text-[var(--muted-foreground)]">세금일시납 별도 ' + fmtMan(totTaxLump) + '원</div></div>' +
+        '<div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]"><div class="text-[var(--muted-foreground)]">누적 영업순이익</div><div class="font-mono font-bold text-sm mt-0.5 ' + (totOpProfit >= 0 ? 'text-[var(--success)]' : 'text-[var(--error)]') + '">' + (totOpProfit >= 0 ? '+' : '') + fmtMan(totOpProfit) + '원</div><div class="text-[11px] text-[var(--muted-foreground)]">영업이익률 ' + opMargin + '%</div></div>' +
+        '<div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--primary)]"><div class="text-[var(--muted-foreground)]">현재 2개통장 잔액</div><div class="font-mono font-bold text-sm mt-0.5 text-[var(--primary)]">' + fmtMan(totalBankNow) + '원</div><div class="text-[11px] text-[var(--muted-foreground)]">흑자 ' + surplusMonths + '개월 / 적자 ' + deficitMonths + '개월</div></div>';
+
+      const renderList = function(items) {
+        return items.map(function(it, idx) {
+          return '<div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)] space-y-1">' +
+            '<div class="font-bold">' + (idx + 1) + '. ' + it.title + '</div>' +
+            '<div class="text-[11px] text-[var(--muted-foreground)] leading-relaxed">' + it.desc + '</div>' +
+          '</div>';
+        }).join('');
+      };
+
+      prosEl.innerHTML = renderList([
+        {
+          title: '안정적인 매출 규모 (월평균 ' + fmtMan(avgRev) + '원)',
+          desc: ymKeys.length + '개월 누적 매출 ' + fmtMan(totRev) + '원을 기록 중이며, ' + bestYm + '에는 최고 영업이익(+' + fmtMan(bestProfit) + '원)을 달성했습니다.'
+        },
+        {
+          title: '누적 영업흑자 ' + fmtMan(totOpProfit) + '원 (이익률 ' + opMargin + '%)',
+          desc: '일시불 세금 납부(' + fmtMan(totTaxLump) + '원)를 분리한 순수 병원 영업 기준 ' + surplusMonths + '개월 흑자를 유지하고 있습니다.'
+        },
+        {
+          title: '충분한 유동성 현금 (' + fmtMan(totalBankNow) + '원 보유)',
+          desc: '우리·경남 2개 통장에 ' + fmtMan(totalBankNow) + '원 잔액을 확보하고 있어, 다가오는 부가세·종소세 및 20~25일 고정 출금 대응 여력이 양호합니다.'
+        }
+      ]);
+
+      consEl.innerHTML = renderList([
+        {
+          title: '높은 고정비 비중 (매출의 ' + fixedRatio + '%)',
+          desc: '급여(' + payrollRatio + '%)와 임대료·장비리스(' + fmtMan(totRent + totLease) + '원) 등 매달 숨만 쉬어도 나가는 고정비가 커서 매출 변동 시 수익성 타격이 큽니다.'
+        },
+        {
+          title: '재료비·사업자카드 지출 비중 (' + supplyCardRatio + '%)',
+          desc: '에이티움 재료비 및 13·14·23일 카드대금 합계가 누적 ' + fmtMan(totSupply + totCard) + '원입니다. 카드 내역 세부 분해 없이는 원가 누수를 찾기 어렵습니다.'
+        },
+        {
+          title: '마케팅·플랫폼 수수료 및 적자 월 발생 (' + worstYm + ')',
+          desc: '직접 이체한 마케팅·유치 수수료만 ' + fmtMan(totMkt) + '원(매출의 ' + mktRatio + '%)이며, ' + worstYm + '처럼 매입·인건비가 겹치면 월간 영업적자(' + fmtMan(worstProfit) + '원)가 발생합니다.'
+        }
+      ]);
+
+      actEl.innerHTML = renderList([
+        {
+          title: '세금 적립금 별도 통장/구분 관리 정착',
+          desc: '손익 탭 하단의 부가세(7월 리셋)와 종합소득세(1~선택월 누적 누진세율) 남은 예상액만큼은 통장 잔액 중 "사용 불가 세금 몫"으로 묶어두세요.'
+        },
+        {
+          title: '사업자카드 3군(삼성·국민/우리/신한·경남) 사용내역 월 1회 점검',
+          desc: '매월 13·14·23일 카드대금이 크게 빠져나가므로, 카드사별 재료비 vs 소모품 vs 식대 비중을 15% 절감 목표로 점검하면 순이익 개선 폭이 가장 큽니다.'
+        },
+        {
+          title: (totUncertain > 0 ? '미분류 거래 ' + totUncertain + '건 메모·규칙 확정하기' : '인건비·마케팅 효율 상시 모니터링'),
+          desc: (totUncertain > 0
+            ? '기간 탭의 [🤔 헷갈리는(기타) 항목만] 필터에 남은 ' + totUncertain + '건의 용도를 확인하면 재무제표 정확도가 100%에 도달합니다.'
+            : '미분류 거래 0건으로 장부가 깨끗합니다! 월별 인건비율(' + payrollRatio + '%)과 마케팅비율(' + mktRatio + '%) 상한선을 정해 매월 1회 비교하세요.')
+        }
+      ]);
+    }
+
     function switchTab(tab) {
-      const tabs = ['pnl', 'snapshot', 'credit', 'period', 'category'];
+      const tabs = ['pnl', 'period', 'category', 'credit', 'review'];
       tabs.forEach(function(t) {
         document.getElementById('tab-' + t).classList.add('hidden');
         document.getElementById('tab-btn-' + t).classList.remove('tab-active');
