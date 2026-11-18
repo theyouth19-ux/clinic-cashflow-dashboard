@@ -61,6 +61,9 @@
     .flash-change {
       animation: pulseFlash 0.8s ease-out;
     }
+    html { font-size: 116%; }
+    .text-\[11px\] { font-size: 0.72rem !important; }
+    .text-\[10px\] { font-size: 0.66rem !important; }
   </style>
 </head>
 <body class="bg-[var(--background)] text-[var(--foreground)] antialiased p-3 md:p-6 min-h-screen">
@@ -86,6 +89,11 @@
         <button type="button" id="btn-mode-unfolded" onclick="setScreenMode('unfolded')" class="px-2.5 py-1.5 text-xs rounded-lg tab-active transition">
           🖥️ PC · 펼침
         </button>
+        <div class="flex items-center rounded-lg bg-[var(--secondary)] overflow-hidden text-xs">
+          <button type="button" onclick="adjustFontScale(-8)" title="글자 작게" class="px-2 py-1.5 font-bold hover:bg-[var(--primary)] hover:text-white transition">가-</button>
+          <span id="font-scale-lbl" class="px-1.5 font-mono text-[11px] opacity-80">116%</span>
+          <button type="button" onclick="adjustFontScale(8)" title="글자 크게" class="px-2 py-1.5 font-bold hover:bg-[var(--primary)] hover:text-white transition">가+</button>
+        </div>
       </div>
     </div>
 
@@ -3242,8 +3250,27 @@
       }
     }
 
+    const FONT_SCALE_KEY = 'clinic_font_scale_v1';
+    let currentFontScale = 116;
+
+    function applyFontScale(pct) {
+      currentFontScale = Math.max(92, Math.min(140, Math.round(pct || 116)));
+      document.documentElement.style.fontSize = currentFontScale + '%';
+      const lbl = document.getElementById('font-scale-lbl');
+      if (lbl) lbl.textContent = currentFontScale + '%';
+      try { localStorage.setItem(FONT_SCALE_KEY, String(currentFontScale)); } catch (e) {}
+    }
+
+    function adjustFontScale(delta) {
+      applyFontScale(currentFontScale + delta);
+    }
+
     // 초기 진입 시 화면 폭에 따라 폴드5(접음) vs PC·폴드5(펼침) 자동 감지
     (function initApp() {
+      try {
+        const savedScale = parseInt(localStorage.getItem(FONT_SCALE_KEY) || '116', 10);
+        applyFontScale(isNaN(savedScale) ? 116 : savedScale);
+      } catch (e) { applyFontScale(116); }
       if (window.innerWidth < 500) {
         setScreenMode('folded');
       } else {
