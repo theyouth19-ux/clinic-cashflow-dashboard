@@ -64,6 +64,7 @@ vm.createContext(sandbox);
 
 const fnNames = [
   'applyBucketTarget',
+  'applyCustomRuleToTx',
   'classifyBankTransaction',
   'calcKoreanIncomeTax',
   'parseTxTimestampMinutes',
@@ -263,6 +264,41 @@ runCase('22. 교차 통장 이체 자동 대조 상계 (reconcileCrossBankTransf
   assert.strictEqual(changed, true);
   assert.strictEqual(sandbox.appState.monthlyData['2026-07'].inflowTotals.cashHana, 0);
   assert.strictEqual(sandbox.appState.monthlyData['2026-07'].transactions[1].bucketTarget, null);
+});
+
+runCase('23. 화면 직접 분류 규칙(customRules) 거래처 단위 오버라이드', () => {
+  sandbox.appState = {
+    settings: {
+      customRules: {
+        'desc:OUT:신규제약(주)': 'cards.scheduledSupplyTransfer20',
+        'desc:OUT:생활비계좌': 'exclude.living'
+      }
+    }
+  };
+  const rSupply = classify({ desc: '신규제약(주)', outAmt: 350000 });
+  assert.strictEqual(rSupply.bucketTarget, 'cards.scheduledSupplyTransfer20');
+  assert.strictEqual(rSupply.bucketDelta, 350000);
+  assert.strictEqual(rSupply.isUncertain, false);
+  const rLiving = classify({ desc: '생활비계좌', outAmt: 1200000 });
+  assert.strictEqual(rLiving.bucketTarget, null);
+  assert.strictEqual(rLiving.bucketDelta, 0);
+  assert.strictEqual(rLiving.isUncertain, false);
+});
+
+runCase('24. 화면 직접 분류 규칙(customRules) 개별 거래 ID 우선순위 오버라이드', () => {
+  const customTxId = 'woori|1005-104-863854|2025-11-10 09:30|500000|0|1000000|모바일|알수없는거래처';
+  sandbox.appState = {
+    settings: {
+      customRules: {
+        'desc:OUT:알수없는거래처': 'outflow.welfareOtherCard',
+        ['tx:' + customTxId]: 'outflow.marketingCard'
+      }
+    }
+  };
+  const rTxSpecific = classify({ txId: customTxId, desc: '알수없는거래처', outAmt: 500000 });
+  assert.strictEqual(rTxSpecific.bucketTarget, 'outflow.marketingCard');
+  assert.strictEqual(rTxSpecific.isUncertain, false);
+  sandbox.appState = {};
 });
 
 console.log(`ALL PASSED: ${results.length}/${results.length} regression checks OK (JS syntax & DOM IDs verified)`);

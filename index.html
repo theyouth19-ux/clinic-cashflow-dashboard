@@ -141,14 +141,21 @@
           <span class="px-2 py-0.5 rounded bg-[var(--success)] text-black font-bold">월 0원 · 메모/거래처 자동분류</span>
           <span id="real-mode-badge" class="text-[var(--warning)] font-semibold">⚠️ 테스트용 가상 샘플</span>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-1.5">
           <button type="button" onclick="reclassifyAllMonths(true)" class="px-2.5 py-1 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] font-bold hover:opacity-90">
             🔁 전체 재분류
           </button>
+          <button type="button" onclick="exportBackupJson()" class="px-2.5 py-1 rounded-lg bg-[var(--secondary)] text-[var(--foreground)] font-bold hover:opacity-90">
+            💾 백업 저장(.json)
+          </button>
+          <label class="px-2.5 py-1 rounded-lg bg-[var(--secondary)] text-[var(--foreground)] font-bold hover:opacity-90 cursor-pointer">
+            📂 백업 불러오기
+            <input id="backup-json-input" type="file" accept=".json,application/json" onchange="importBackupJson(event)" class="hidden" />
+          </label>
           <button type="button" onclick="resetToRealWooriOnly()" class="px-2.5 py-1 rounded-lg bg-[var(--error)] text-white font-bold hover:opacity-90">
             🧹 전체 초기화 (0원)
           </button>
-          <button type="button" onclick="switchTopPanel('none')" class="text-[var(--muted-foreground)] hover:underline">▲ 접기</button>
+          <button type="button" onclick="switchTopPanel('none')" class="text-[var(--muted-foreground)] hover:underline ml-1">▲ 접기</button>
         </div>
       </div>
 
@@ -432,6 +439,8 @@
         </div>
         <span id="live-status-badge" class="px-2 py-0.5 text-xs font-semibold rounded-full bg-[var(--secondary)] text-[var(--success)]">● 1일~말일 결산 적용</span>
       </div>
+
+      <div id="year-selector-bar" class="flex flex-wrap items-center justify-between gap-1.5 bg-[var(--card)] border border-[var(--border)] p-1.5 rounded-xl text-xs"></div>
 
       <div class="grid grid-cols-5 gap-1 bg-[var(--card)] border border-[var(--border)] p-1 rounded-xl">
         <button type="button" id="tab-btn-pnl" onclick="switchTab('pnl')" class="py-2 px-1 rounded-lg text-xs text-center transition tab-active">
@@ -731,7 +740,7 @@
 
         <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3.5 space-y-2">
           <div class="flex items-center justify-between">
-            <h3 class="font-bold text-xs">📊 월별 손익 추이 비교 (5~11월 업로드 월 자동 집계)</h3>
+            <h3 id="monthly-comparison-title" class="font-bold text-xs">📊 월별 손익 추이 비교 (업로드 월 자동 집계)</h3>
             <span class="text-xs text-[var(--muted-foreground)]">단위: 만원</span>
           </div>
           <div class="overflow-x-auto">
@@ -748,6 +757,31 @@
                 </tr>
               </thead>
               <tbody id="monthly-comparison-body" class="divide-y divide-[var(--card-border)] font-mono"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="yoy-comparison-card" class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3.5 space-y-2.5">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 class="font-bold text-xs">📈 연도별 동월 비교표 (2024·2025·2026·2027년 1~12월)</h3>
+              <div class="text-[11px] text-[var(--muted-foreground)]">같은 달 기준 연도별 흐름 비교 (숫자 클릭 시 해당 월 손익 이동 · 단위: 만원)</div>
+            </div>
+            <div id="yoy-metric-bar" class="flex flex-wrap items-center gap-1 text-xs"></div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs text-right">
+              <thead>
+                <tr class="border-b border-[var(--border)] text-[var(--muted-foreground)]">
+                  <th class="py-1.5 text-left">월</th>
+                  <th class="py-1.5">2024년</th>
+                  <th class="py-1.5">2025년</th>
+                  <th class="py-1.5">2026년</th>
+                  <th class="py-1.5">2027년</th>
+                  <th id="yoy-diff-header" class="py-1.5">전년 대비</th>
+                </tr>
+              </thead>
+              <tbody id="yoy-comparison-body" class="divide-y divide-[var(--card-border)] font-mono"></tbody>
             </table>
           </div>
         </div>
@@ -861,6 +895,9 @@
         vatRate: 0.05,
         incomeTaxRate: 0.33,
         unbankedCash: 0,
+        activeYear: '2026',
+        yoyMetric: 'rev',
+        customRules: {},
         internalKeywords: '집금,내통장,내부',
         webhookUrl: '',
         secretToken: 'clinic-24'
@@ -944,6 +981,9 @@
             if (!parsed.settings) parsed.settings = cloneObj(INITIAL_STATE.settings);
             if (!parsed.settings.wooriAccount) parsed.settings.wooriAccount = '1005-104-863854';
             if (!parsed.settings.kyongnamAccount) parsed.settings.kyongnamAccount = '207-0172-8715-04';
+            if (!parsed.settings.customRules || typeof parsed.settings.customRules !== 'object') parsed.settings.customRules = {};
+            if (!parsed.settings.activeYear) parsed.settings.activeYear = '2026';
+            if (!parsed.settings.yoyMetric) parsed.settings.yoyMetric = 'rev';
             return parsed;
           }
         }
@@ -1452,24 +1492,146 @@
       renderAll(false);
     }
 
+    const SUPPORTED_YEARS = ['2024', '2025', '2026', '2027'];
+
+    function createEmptyMonthBucket() {
+      return {
+        inflowTotals: { pgCard: 0, wirelessCard: 0, cashHana: 0, platformKyongnam: 0, naverPay: 0, kakaoPay: 0 },
+        outflowTotals: { payroll: 0, lease: 0, taxInsRent: 0, taxLumpSum: 0, vatLumpSum: 0, vatH1Settle: 0, incLumpSum: 0, incAdvance: 0, incPrevYear: 0, rent: 0, supplyCard: 0, marketingCard: 0, welfareOtherCard: 0 },
+        cards: {
+          card13: { currentMonthSwipes: 0, confirmedNextWithdraw: 0 },
+          card14: { currentMonthSwipes: 0, confirmedNextWithdraw: 0 },
+          card23: { currentMonthSwipes: 0, confirmedNextWithdraw: 0 },
+          scheduledSupplyTransfer20: 0
+        },
+        endBalances: { woori: null, kyongnam: null },
+        latestDt: { woori: '', kyongnam: '' },
+        transactions: []
+      };
+    }
+
     function ensureMonthlyBucket(ym) {
       if (!appState.monthlyData) appState.monthlyData = {};
       if (!appState.monthlyData[ym]) {
-        appState.monthlyData[ym] = {
-          inflowTotals: { pgCard: 0, wirelessCard: 0, cashHana: 0, platformKyongnam: 0, naverPay: 0, kakaoPay: 0 },
-          outflowTotals: { payroll: 0, lease: 0, taxInsRent: 0, taxLumpSum: 0, vatLumpSum: 0, vatH1Settle: 0, incLumpSum: 0, incAdvance: 0, incPrevYear: 0, rent: 0, supplyCard: 0, marketingCard: 0, welfareOtherCard: 0 },
-          cards: {
-            card13: { currentMonthSwipes: 0, confirmedNextWithdraw: 0 },
-            card14: { currentMonthSwipes: 0, confirmedNextWithdraw: 0 },
-            card23: { currentMonthSwipes: 0, confirmedNextWithdraw: 0 },
-            scheduledSupplyTransfer20: 0
-          },
-          endBalances: { woori: null, kyongnam: null },
-          latestDt: { woori: '', kyongnam: '' },
-          transactions: []
-        };
+        appState.monthlyData[ym] = createEmptyMonthBucket();
       }
       return appState.monthlyData[ym];
+    }
+
+    function getActiveYear() {
+      if (appState && appState.settings && appState.settings.activeYear) {
+        return String(appState.settings.activeYear);
+      }
+      const keys = Object.keys((appState && appState.monthlyData) || {}).sort();
+      return keys.length ? keys[keys.length - 1].slice(0, 4) : '2026';
+    }
+
+    function setActiveYear(yr) {
+      if (!appState.settings) appState.settings = cloneObj(INITIAL_STATE.settings);
+      appState.settings.activeYear = String(yr);
+      syncMonthSelectOptions();
+      safeSaveState();
+      renderAll(true);
+    }
+
+    function renderYearSelectorBar() {
+      const bar = document.getElementById('year-selector-bar');
+      if (!bar) return;
+      const allKeys = Object.keys((appState && appState.monthlyData) || {});
+      const counts = {};
+      const yearSet = {};
+      SUPPORTED_YEARS.forEach(function(y) { yearSet[y] = true; counts[y] = 0; });
+      allKeys.forEach(function(ym) {
+        const y = ym.slice(0, 4);
+        yearSet[y] = true;
+        counts[y] = (counts[y] || 0) + 1;
+      });
+      const years = Object.keys(yearSet).sort();
+      const activeYear = getActiveYear();
+      const customCount = Object.keys((appState.settings && appState.settings.customRules) || {}).length;
+
+      const btnsHtml = years.map(function(y) {
+        const isAct = y === activeYear;
+        const cnt = counts[y] || 0;
+        const cls = isAct ? 'tab-active' : 'bg-[var(--secondary)] hover:opacity-90';
+        const suffix = cnt > 0 ? (' (' + cnt + '개월)') : ' (미업로드)';
+        return '<button type="button" onclick="setActiveYear(\'' + y + '\')" class="px-2.5 py-1 rounded-lg font-bold transition ' + cls + '">' +
+          y + '년<span class="font-normal opacity-80">' + suffix + '</span></button>';
+      }).join('');
+
+      const ruleBadge = customCount > 0
+        ? '<span class="text-[11px] px-2 py-0.5 rounded bg-[var(--secondary)] text-[var(--primary)] font-semibold">📌 직접분류 규칙 ' + customCount + '개 적용중</span>'
+        : '<span class="text-[11px] text-[var(--muted-foreground)]">📅 연도별 손익·세금 분리 조회</span>';
+
+      bar.innerHTML = '<div class="flex flex-wrap items-center gap-1"><span class="font-bold text-[var(--muted-foreground)] px-1">📆 연도 선택:</span>' + btnsHtml + '</div>' + ruleBadge;
+    }
+
+    function exportBackupJson() {
+      const payload = {
+        version: 2,
+        exportedAt: new Date().toISOString(),
+        state: appState
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const d = new Date();
+      const stamp = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      a.href = url;
+      a.download = 'clinic_cashflow_backup_' + stamp + '.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      const toast = document.getElementById('sim-toast');
+      if (toast) {
+        const mCount = Object.keys((appState && appState.monthlyData) || {}).length;
+        toast.textContent = '💾 전체 백업 파일(clinic_cashflow_backup_' + stamp + '.json · ' + mCount + '개월치 원장 포함)을 저장했습니다!';
+        toast.classList.remove('hidden');
+      }
+    }
+
+    function importBackupJson(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const toast = document.getElementById('sim-toast');
+        try {
+          const parsed = JSON.parse(String(e.target.result || ''));
+          const nextState = (parsed && parsed.state && parsed.state.settings) ? parsed.state : parsed;
+          if (!nextState || typeof nextState !== 'object' || !nextState.balances || !nextState.settings) {
+            throw new Error('올바른 병원 자금관제 백업 파일(.json) 형식이 아닙니다.');
+          }
+          if (!nextState.settings.customRules || typeof nextState.settings.customRules !== 'object') {
+            nextState.settings.customRules = {};
+          }
+          if (!nextState.settings.activeYear) {
+            const mks = Object.keys(nextState.monthlyData || {}).sort();
+            nextState.settings.activeYear = mks.length ? mks[mks.length - 1].slice(0, 4) : '2026';
+          }
+          if (!nextState.settings.yoyMetric) nextState.settings.yoyMetric = 'rev';
+          appState = nextState;
+          reclassifyAllMonths(false, true);
+          syncMonthSelectOptions();
+          safeSaveState();
+          renderAll(true);
+          if (toast) {
+            const mCount = Object.keys(appState.monthlyData || {}).length;
+            toast.textContent = '📂 백업 파일(' + file.name + ') 복원 완료! ' + mCount + '개월치 데이터·규칙이 복구되었습니다.';
+            toast.classList.remove('hidden');
+          }
+        } catch (err) {
+          if (toast) {
+            toast.textContent = '❌ 백업 복원 실패: ' + err.message;
+            toast.classList.remove('hidden');
+          }
+        } finally {
+          event.target.value = '';
+        }
+      };
+      reader.readAsText(file, 'utf-8');
     }
 
     function syncLatestMonthToTopLevel() {
@@ -1493,11 +1655,18 @@
     }
 
     function syncMonthSelectOptions() {
+      renderYearSelectorBar();
       const sel = document.getElementById('pnl-month-select');
       if (!sel) return;
-      const keys = Object.keys(appState.monthlyData || {}).sort().reverse();
-      if (!keys.length) {
+      const activeYear = getActiveYear();
+      const allKeys = Object.keys(appState.monthlyData || {}).sort().reverse();
+      if (!allKeys.length) {
         sel.innerHTML = '<option value="cur">당월 실시간 누적</option><option value="prev1">전월 공식 마감</option><option value="prev2">전전월 공식 마감</option>';
+        return;
+      }
+      const keys = allKeys.filter(function(ym) { return ym.slice(0, 4) === activeYear; });
+      if (!keys.length) {
+        sel.innerHTML = '<option value="empty-' + activeYear + '">' + activeYear + '년 업로드된 월 내역 없음 (우리·경남 엑셀을 올려주세요)</option>';
         return;
       }
       const prevVal = sel.value;
@@ -1516,10 +1685,24 @@
     function getActiveMonthView() {
       const sel = document.getElementById('pnl-month-select');
       const val = sel ? sel.value : 'cur';
-      if (appState.monthlyData && appState.monthlyData[val]) {
-        return { ym: val, data: appState.monthlyData[val], isMonthly: true };
+      if (val && val.indexOf('empty-') === 0) {
+        return { ym: val.slice(6) + '-00', data: createEmptyMonthBucket(), isMonthly: true, isEmptyYear: true };
       }
-      return { ym: val, data: appState, isMonthly: false };
+      if (appState.monthlyData && appState.monthlyData[val]) {
+        return { ym: val, data: appState.monthlyData[val], isMonthly: true, isEmptyYear: false };
+      }
+      return { ym: val, data: appState, isMonthly: false, isEmptyYear: false };
+    }
+
+    function jumpToMonth(ym) {
+      if (!ym || !appState.monthlyData || !appState.monthlyData[ym]) return;
+      if (!appState.settings) appState.settings = cloneObj(INITIAL_STATE.settings);
+      appState.settings.activeYear = ym.slice(0, 4);
+      syncMonthSelectOptions();
+      const sel = document.getElementById('pnl-month-select');
+      if (sel) sel.value = ym;
+      renderAll(true);
+      switchTab('pnl');
     }
 
     function decodeBankBuffer(buffer) {
@@ -1584,6 +1767,135 @@
       }
     }
 
+    function getCustomRuleOptionsForDir(dir) {
+      if (dir === 'IN') {
+        return [
+          { code: 'inflow.pgCard', label: '🟦 카드·PG정산' },
+          { code: 'inflow.wirelessCard', label: '💳 단말기·제로페이' },
+          { code: 'inflow.cashHana', label: '💵 현금매출·환급' },
+          { code: 'inflow.platformKyongnam', label: '🟧 플랫폼매출' },
+          { code: 'exclude.internal_in', label: '🔄 내부/본인이체(매출제외)' },
+          { code: 'exclude.unbanked_in', label: '💵 보유현금 입금(매출제외)' },
+          { code: 'offset.payroll', label: '🔄 급여반환(급여상계)' }
+        ];
+      }
+      return [
+        { code: 'outflow.payroll', label: '👥 급여·인건비' },
+        { code: 'cards.scheduledSupplyTransfer20', label: '💉 재료·약품이체' },
+        { code: 'outflow.marketingCard', label: '📢 마케팅·수수료' },
+        { code: 'outflow.welfareOtherCard', label: '🏥 병원운영·고정비' },
+        { code: 'outflow.taxInsRent', label: '🏛️ 세금·4대보험' },
+        { code: 'outflow.lease', label: '⚙️ 장비리스료' },
+        { code: 'outflow.rent', label: '🏢 임대료·관리비' },
+        { code: 'cards.card13', label: '💳 삼성카드출금(13일)' },
+        { code: 'cards.card14', label: '💳 4대카드출금(14일)' },
+        { code: 'cards.card23', label: '💳 경남카드출금(23일)' },
+        { code: 'exclude.living', label: '🏠 가사·생활비(경비제외)' },
+        { code: 'exclude.internal', label: '🔄 내부/본인이체(경비제외)' },
+        { code: 'outflow.vatLumpSum', label: '🏦 부가세 선납' },
+        { code: 'outflow.vatH1Settle', label: '🏦 상반기 부가세 납부' },
+        { code: 'outflow.incAdvance', label: '🏦 종소세 선납' },
+        { code: 'outflow.incPrevYear', label: '🏦 전년도 종소세 납부' }
+      ];
+    }
+
+    function getTxAssignedRuleKey(t) {
+      const rules = (appState && appState.settings && appState.settings.customRules) || {};
+      const parts = String((t && t.id) || '').split('|');
+      if (parts.length < 8) return '';
+      const dir = t.type === 'BANK_IN' ? 'IN' : 'OUT';
+      const cleanDesc = parts.slice(7).join('|').trim();
+      return rules['tx:' + t.id] || (cleanDesc ? (rules['desc:' + dir + ':' + cleanDesc] || '') : '');
+    }
+
+    function assignTxCustomCategory(txId, ruleCode) {
+      if (!txId || !appState || !appState.monthlyData) return;
+      if (!appState.settings) appState.settings = cloneObj(INITIAL_STATE.settings);
+      if (!appState.settings.customRules || typeof appState.settings.customRules !== 'object') {
+        appState.settings.customRules = {};
+      }
+      const rules = appState.settings.customRules;
+      let targetTx = null;
+      const mKeys = Object.keys(appState.monthlyData);
+      for (let i = 0; i < mKeys.length; i++) {
+        const list = (appState.monthlyData[mKeys[i]] && appState.monthlyData[mKeys[i]].transactions) || [];
+        targetTx = list.find(function(x) { return x.id === txId; });
+        if (targetTx) break;
+      }
+      if (!targetTx) return;
+
+      const parts = String(txId).split('|');
+      const dir = targetTx.type === 'BANK_IN' ? 'IN' : 'OUT';
+      const cleanDesc = parts.length >= 8 ? parts.slice(7).join('|').trim() : '';
+      const isGenericDesc = !cleanDesc || cleanDesc.length < 2 || /^(김대윤|유픽의원|모바일|펌뱅킹|기타|카드)$/.test(cleanDesc);
+
+      if (!ruleCode || ruleCode === 'auto') {
+        delete rules['tx:' + txId];
+        if (cleanDesc) delete rules['desc:' + dir + ':' + cleanDesc];
+        reclassifyAllMonths(false, false);
+        renderAll(true);
+        const toast = document.getElementById('sim-toast');
+        if (toast) {
+          toast.textContent = '🤖 [' + (targetTx.title || cleanDesc) + '] 자동분류 규칙으로 복원되었습니다.';
+          toast.classList.remove('hidden');
+        }
+        return;
+      }
+
+      rules['tx:' + txId] = ruleCode;
+      if (!isGenericDesc) {
+        rules['desc:' + dir + ':' + cleanDesc] = ruleCode;
+      }
+      reclassifyAllMonths(false, false);
+      renderAll(true);
+      const opt = getCustomRuleOptionsForDir(dir).find(function(o) { return o.code === ruleCode; });
+      const optLbl = opt ? opt.label : ruleCode;
+      const toast = document.getElementById('sim-toast');
+      if (toast) {
+        toast.textContent = '📌 [' + (targetTx.title || cleanDesc) + '] ➔ "' + optLbl + '" 지정 완료!' + (!isGenericDesc ? ' (같은 거래처 모든 내역에도 자동 적용)' : ' (해당 거래 1건만 적용)');
+        toast.classList.remove('hidden');
+      }
+    }
+
+    function applyCustomRuleToTx(ruleKey, inAmt, outAmt) {
+      const ruleMap = {
+        'outflow.payroll': { target: 'outflow.payroll', badge: '👥 급여·인건비(직접지정)', sub: '직접 지정된 급여·인건비', mult: 1 },
+        'cards.scheduledSupplyTransfer20': { target: 'cards.scheduledSupplyTransfer20', badge: '💉 재료·약품이체(직접지정)', sub: '직접 지정된 재료·약품비', mult: 1 },
+        'outflow.marketingCard': { target: 'outflow.marketingCard', badge: '📢 마케팅·수수료(직접지정)', sub: '직접 지정된 마케팅·수수료', mult: 1 },
+        'outflow.welfareOtherCard': { target: 'outflow.welfareOtherCard', badge: '🏥 병원운영·고정비(직접지정)', sub: '직접 지정된 병원 운영비', mult: 1 },
+        'outflow.taxInsRent': { target: 'outflow.taxInsRent', badge: '🏛️ 세금·4대보험(직접지정)', sub: '직접 지정된 세금·4대보험', mult: 1 },
+        'outflow.lease': { target: 'outflow.lease', badge: '⚙️ 장비리스료(직접지정)', sub: '직접 지정된 장비리스료', mult: 1 },
+        'outflow.rent': { target: 'outflow.rent', badge: '🏢 임대료·관리비(직접지정)', sub: '직접 지정된 임대료·관리비', mult: 1 },
+        'cards.card13': { target: 'cards.card13', badge: '💳 삼성카드출금(직접지정)', sub: '직접 지정된 13일 카드대금', mult: 1 },
+        'cards.card14': { target: 'cards.card14', badge: '💳 4대카드출금(직접지정)', sub: '직접 지정된 14일 카드대금', mult: 1 },
+        'cards.card23': { target: 'cards.card23', badge: '💳 경남카드출금(직접지정)', sub: '직접 지정된 23일 카드대금', mult: 1 },
+        'outflow.vatLumpSum': { target: 'outflow.vatLumpSum', badge: '🏦 부가세 선납(직접지정)', sub: '월 영업경비 제외 (세금정산 반영)', mult: 1 },
+        'outflow.vatH1Settle': { target: 'outflow.vatH1Settle', badge: '🏦 상반기 부가세(직접지정)', sub: '월 영업경비 제외 (세금정산 반영)', mult: 1 },
+        'outflow.incAdvance': { target: 'outflow.incAdvance', badge: '🏦 종소세 선납(직접지정)', sub: '월 영업경비 제외 (세금정산 반영)', mult: 1 },
+        'outflow.incPrevYear': { target: 'outflow.incPrevYear', badge: '🏦 전년도 종소세(직접지정)', sub: '월 영업경비 제외 (세금정산 반영)', mult: 1 },
+        'exclude.living': { target: null, badge: '🏠 가사·생활비(직접지정)', sub: '병원경비 제외 (직접 지정)', mult: 0 },
+        'exclude.internal': { target: null, badge: '🔄 내부/본인이체(직접지정)', sub: '경비 제외 (직접 지정)', mult: 0 },
+        'inflow.pgCard': { target: 'inflow.pgCard', badge: '🟦 카드·PG정산(직접지정)', sub: '직접 지정된 카드·PG 매출', mult: 1 },
+        'inflow.wirelessCard': { target: 'inflow.wirelessCard', badge: '💳 단말기·제로페이(직접지정)', sub: '직접 지정된 단말기·카드정산', mult: 1 },
+        'inflow.cashHana': { target: 'inflow.cashHana', badge: '💵 현금매출·환급(직접지정)', sub: '직접 지정된 현금매출·환급', mult: 1 },
+        'inflow.platformKyongnam': { target: 'inflow.platformKyongnam', badge: '🟧 플랫폼매출(직접지정)', sub: '직접 지정된 플랫폼 매출', mult: 1 },
+        'exclude.internal_in': { target: null, badge: '🔄 내부/본인이체(직접지정)', sub: '매출 제외 (직접 지정)', mult: 0 },
+        'exclude.unbanked_in': { target: null, badge: '💵 보유현금 입금(직접지정)', sub: '미입금 현금 입금 (매출 중복 제외)', mult: 0 },
+        'offset.payroll': { target: 'outflow.payroll', badge: '🔄 급여반환·상계(직접지정)', sub: '직접 지정된 급여 상계', mult: -1 }
+      };
+      const entry = ruleMap[ruleKey];
+      if (!entry) return null;
+      const baseAmt = inAmt > 0 ? inAmt : outAmt;
+      return {
+        badge: entry.badge,
+        sub: entry.sub,
+        txType: inAmt > 0 ? 'BANK_IN' : 'BANK_OUT',
+        isUncertain: false,
+        bucketTarget: entry.target,
+        bucketDelta: baseAmt * entry.mult
+      };
+    }
+
     function classifyBankTransaction(ctx) {
       const bank = ctx.bank;
       const dtNorm = ctx.dtNorm;
@@ -1597,6 +1909,7 @@
       const kwList = ctx.kwList || [];
       const atMaxByYm = ctx.atMaxByYm || {};
       const cancelled = Boolean(ctx.cancelled);
+      const txId = ctx.txId || '';
 
       const combined = (summary + ' ' + desc + ' ' + memo).trim();
       let badge = bank === 'kyongnam' ? '🟧 경남' : '🟦 우리';
@@ -1605,6 +1918,17 @@
       let isUncertain = false;
       let bucketTarget = null;
       let bucketDelta = inAmt > 0 ? inAmt : outAmt;
+
+      const customRules = (typeof appState !== 'undefined' && appState && appState.settings && appState.settings.customRules) ? appState.settings.customRules : null;
+      if (!cancelled && customRules && (inAmt > 0 || outAmt > 0)) {
+        const ruleDir = inAmt > 0 ? 'IN' : 'OUT';
+        const cleanRuleDesc = String(desc || '').trim();
+        const matchedRule = (txId && customRules['tx:' + txId]) || (cleanRuleDesc && customRules['desc:' + ruleDir + ':' + cleanRuleDesc]) || '';
+        if (matchedRule) {
+          const customCls = applyCustomRuleToTx(matchedRule, inAmt, outAmt);
+          if (customCls) return customCls;
+        }
+      }
 
       if (cancelled) {
         badge = '🔄 대체취소(상계)';
@@ -1917,9 +2241,11 @@
         }
       });
 
+      const importedYmMap = {};
       parsedRaw.forEach(function(row) {
         const dtNorm = row.dtNorm;
         const ym = dtNorm.slice(0, 7);
+        importedYmMap[ym] = true;
         const bucket = ensureMonthlyBucket(ym);
         const summary = row.summary;
         const desc = row.desc;
@@ -1939,7 +2265,7 @@
         }
 
         const fp = bank + '|' + acctKey + '|' + dtNorm + '|' + outAmt + '|' + inAmt + '|' + (bal !== null ? bal : '') + '|' + summary + '|' + desc;
-        const txCtx = { bank: bank, dtNorm: dtNorm, ym: ym, summary: summary, desc: desc, memo: memo, branch: branch, outAmt: outAmt, inAmt: inAmt, kwList: kwList, atMaxByYm: atMaxByYm, cancelled: row.cancelled };
+        const txCtx = { txId: fp, bank: bank, dtNorm: dtNorm, ym: ym, summary: summary, desc: desc, memo: memo, branch: branch, outAmt: outAmt, inAmt: inAmt, kwList: kwList, atMaxByYm: atMaxByYm, cancelled: row.cancelled };
 
         if (appState.processedIds.indexOf(fp) !== -1) {
           if (enrichExistingMemoTx(bucket, fp, memo, txCtx)) {
@@ -1978,6 +2304,10 @@
         addedCount += 1;
       });
 
+      const importedYms = Object.keys(importedYmMap).sort();
+      if (importedYms.length) {
+        appState.settings.activeYear = importedYms[importedYms.length - 1].slice(0, 4);
+      }
       reconcileCrossBankTransfers();
       syncLatestMonthToTopLevel();
       syncMonthSelectOptions();
@@ -2121,9 +2451,11 @@
         }
       });
 
+      const importedYmMap = {};
       parsedRaw.forEach(function(row) {
         const dtNorm = row.dtNorm;
         const ym = dtNorm.slice(0, 7);
+        importedYmMap[ym] = true;
         const bucket = ensureMonthlyBucket(ym);
         const summary = row.summary;
         const desc = row.desc;
@@ -2143,7 +2475,7 @@
         }
 
         const fp = bank + '|' + acctKey + '|' + dtNorm + '|' + outAmt + '|' + inAmt + '|' + (bal !== null ? bal : '') + '|' + summary + '|' + desc;
-        const txCtx = { bank: bank, dtNorm: dtNorm, ym: ym, summary: summary, desc: desc, memo: memo, branch: branch, outAmt: outAmt, inAmt: inAmt, kwList: kwList, atMaxByYm: atMaxByYm, cancelled: row.cancelled };
+        const txCtx = { txId: fp, bank: bank, dtNorm: dtNorm, ym: ym, summary: summary, desc: desc, memo: memo, branch: branch, outAmt: outAmt, inAmt: inAmt, kwList: kwList, atMaxByYm: atMaxByYm, cancelled: row.cancelled };
 
         if (appState.processedIds.indexOf(fp) !== -1) {
           if (enrichExistingMemoTx(bucket, fp, memo, txCtx)) {
@@ -2182,6 +2514,10 @@
         addedCount += 1;
       });
 
+      const importedYms = Object.keys(importedYmMap).sort();
+      if (importedYms.length) {
+        appState.settings.activeYear = importedYms[importedYms.length - 1].slice(0, 4);
+      }
       reconcileCrossBankTransfers();
       syncLatestMonthToTopLevel();
       syncMonthSelectOptions();
@@ -2662,8 +2998,142 @@
       }
     }
 
+    function getMonthMetricValue(mD, metricKey) {
+      if (!mD || !mD.inflowTotals) return 0;
+      const mInf = mD.inflowTotals;
+      const mOut = mD.outflowTotals || {};
+      const mC = mD.cards || {};
+      const rev = (mInf.pgCard || 0) + (mInf.wirelessCard || 0) + (mInf.cashHana || 0) + (mInf.platformKyongnam || 0) + (mInf.naverPay || 0) + (mInf.kakaoPay || 0);
+      if (metricKey === 'rev') return rev;
+      const payroll = mOut.payroll || 0;
+      if (metricKey === 'payroll') return payroll;
+      const mkt = mOut.marketingCard || 0;
+      if (metricKey === 'mkt') return mkt;
+      const cardTotal = ((mC.card13 && mC.card13.currentMonthSwipes) || 0) + ((mC.card14 && mC.card14.currentMonthSwipes) || 0) + ((mC.card23 && mC.card23.currentMonthSwipes) || 0);
+      const supplyCard = cardTotal + (mC.scheduledSupplyTransfer20 || 0);
+      if (metricKey === 'supplyCard') return supplyCard;
+      const fix = payroll + (mOut.lease || 0) + (mOut.taxInsRent || 0) + (mOut.rent || 0);
+      const varCost = supplyCard + mkt + (mOut.welfareOtherCard || 0);
+      return rev - (fix + varCost);
+    }
+
+    function setYoYMetric(metricKey) {
+      if (!appState.settings) appState.settings = cloneObj(INITIAL_STATE.settings);
+      appState.settings.yoyMetric = metricKey || 'rev';
+      safeSaveState();
+      renderYoYComparisonTable();
+    }
+
+    function renderYoYComparisonTable() {
+      const bar = document.getElementById('yoy-metric-bar');
+      const body = document.getElementById('yoy-comparison-body');
+      const diffHeader = document.getElementById('yoy-diff-header');
+      if (!bar || !body) return;
+
+      const metrics = [
+        { key: 'rev', label: '매출', isCost: false },
+        { key: 'opProfit', label: '영업순이익', isCost: false },
+        { key: 'payroll', label: '인건비(급여)', isCost: true },
+        { key: 'supplyCard', label: '재료·카드비', isCost: true },
+        { key: 'mkt', label: '마케팅비', isCost: true }
+      ];
+      const curKey = (appState.settings && appState.settings.yoyMetric) || 'rev';
+      const curMeta = metrics.find(function(m) { return m.key === curKey; }) || metrics[0];
+
+      bar.innerHTML = metrics.map(function(m) {
+        const cls = m.key === curKey ? 'tab-active' : 'bg-[var(--secondary)] hover:opacity-90';
+        return '<button type="button" onclick="setYoYMetric(\'' + m.key + '\')" class="px-2 py-1 rounded-lg font-semibold transition ' + cls + '">' + m.label + '</button>';
+      }).join('');
+
+      const activeYear = getActiveYear();
+      const prevYearNum = (parseInt(activeYear, 10) || 2026) - 1;
+      const prevYear = String(prevYearNum);
+      if (diffHeader) {
+        diffHeader.textContent = '전년비 (' + activeYear.slice(2) + ' vs ' + prevYear.slice(2) + ')';
+      }
+
+      const md = appState.monthlyData || {};
+      const colYears = SUPPORTED_YEARS;
+      const sums = {};
+      const cnts = {};
+      colYears.forEach(function(y) { sums[y] = 0; cnts[y] = 0; });
+      let diffBothPrev = 0;
+      let diffBothCur = 0;
+      let diffBothCnt = 0;
+
+      const rowsHtml = [];
+      for (let m = 1; m <= 12; m++) {
+        const mm = String(m).padStart(2, '0');
+        const cellsHtml = colYears.map(function(y) {
+          const ym = y + '-' + mm;
+          const mD = md[ym];
+          const isActCol = y === activeYear ? ' bg-[var(--secondary)]/45 font-bold' : '';
+          if (!mD) {
+            return '<td class="py-1.5 text-[var(--muted-foreground)]' + isActCol + '">-</td>';
+          }
+          const val = getMonthMetricValue(mD, curKey);
+          sums[y] += val;
+          cnts[y] += 1;
+          const signPrefix = (curKey === 'opProfit' && val < 0) ? '-' : '';
+          const valCls = curKey === 'opProfit'
+            ? (val >= 0 ? 'text-[var(--success)]' : 'text-[var(--error)]')
+            : (y === activeYear ? 'text-[var(--primary)]' : '');
+          return '<td class="py-1.5 cursor-pointer hover:underline ' + valCls + isActCol + '" onclick="jumpToMonth(\'' + ym + '\')">' + signPrefix + fmtMan(val) + '</td>';
+        }).join('');
+
+        const curYmData = md[activeYear + '-' + mm];
+        const prevYmData = md[prevYear + '-' + mm];
+        let diffCellHtml = '<td class="py-1.5 text-[var(--muted-foreground)]">-</td>';
+        if (curYmData && prevYmData) {
+          const cv = getMonthMetricValue(curYmData, curKey);
+          const pv = getMonthMetricValue(prevYmData, curKey);
+          const dv = cv - pv;
+          diffBothCur += cv;
+          diffBothPrev += pv;
+          diffBothCnt += 1;
+          const good = curMeta.isCost ? (dv <= 0) : (dv >= 0);
+          const dCls = dv === 0 ? 'text-[var(--muted-foreground)]' : (good ? 'text-[var(--success)]' : 'text-[var(--error)]');
+          const dSign = dv > 0 ? '+' : (dv < 0 ? '-' : '');
+          const pctStr = pv !== 0 ? (' (' + (dv >= 0 ? '+' : '') + ((dv / Math.abs(pv)) * 100).toFixed(0) + '%)') : '';
+          diffCellHtml = '<td class="py-1.5 font-semibold ' + dCls + '">' + dSign + fmtMan(dv) + '<span class="text-[10px] opacity-80">' + pctStr + '</span></td>';
+        }
+
+        rowsHtml.push('<tr><td class="py-1.5 text-left font-bold">' + m + '월</td>' + cellsHtml + diffCellHtml + '</tr>');
+      }
+
+      const sumCells = colYears.map(function(y) {
+        const isActCol = y === activeYear ? ' bg-[var(--secondary)]/60' : '';
+        if (!cnts[y]) return '<td class="py-1.5 text-[var(--muted-foreground)]' + isActCol + '">-</td>';
+        const sv = sums[y];
+        const sPrefix = (curKey === 'opProfit' && sv < 0) ? '-' : '';
+        return '<td class="py-1.5 font-bold' + isActCol + '">' + sPrefix + fmtMan(sv) + '</td>';
+      }).join('');
+
+      let sumDiffCell = '<td class="py-1.5 text-[var(--muted-foreground)]">-</td>';
+      if (diffBothCnt > 0) {
+        const totalDiff = diffBothCur - diffBothPrev;
+        const goodTot = curMeta.isCost ? (totalDiff <= 0) : (totalDiff >= 0);
+        const totCls = totalDiff === 0 ? 'text-[var(--muted-foreground)]' : (goodTot ? 'text-[var(--success)]' : 'text-[var(--error)]');
+        const totSign = totalDiff > 0 ? '+' : (totalDiff < 0 ? '-' : '');
+        sumDiffCell = '<td class="py-1.5 font-bold ' + totCls + '">' + totSign + fmtMan(totalDiff) + '<span class="text-[10px] opacity-80"> (' + diffBothCnt + '개월동일비교)</span></td>';
+      }
+      rowsHtml.push('<tr class="bg-[var(--secondary)]/50 border-t-2 border-[var(--border)]"><td class="py-1.5 text-left font-bold text-[var(--primary)]">연간 합계</td>' + sumCells + sumDiffCell + '</tr>');
+
+      const avgCells = colYears.map(function(y) {
+        const isActCol = y === activeYear ? ' bg-[var(--secondary)]/60' : '';
+        if (!cnts[y]) return '<td class="py-1.5 text-[var(--muted-foreground)]' + isActCol + '">-</td>';
+        const av = Math.round(sums[y] / cnts[y]);
+        const aPrefix = (curKey === 'opProfit' && av < 0) ? '-' : '';
+        return '<td class="py-1.5 text-[var(--muted-foreground)]' + isActCol + '">' + aPrefix + fmtMan(av) + ' <span class="text-[10px]">(' + cnts[y] + 'm)</span></td>';
+      }).join('');
+      rowsHtml.push('<tr><td class="py-1.5 text-left font-semibold text-[var(--muted-foreground)]">월평균</td>' + avgCells + '<td class="py-1.5 text-[var(--muted-foreground)]">-</td></tr>');
+
+      body.innerHTML = rowsHtml.join('');
+    }
+
     function renderAll(flash) {
       updateDynamicDateLabels();
+      renderYearSelectorBar();
 
       const view = getActiveMonthView();
       const vData = view.data;
@@ -2731,19 +3201,22 @@
 
       document.getElementById('bep-target-lbl').textContent = fmtMan(calculatedBep);
 
+      const activeYear = getActiveYear();
       const selectedMonth = document.getElementById('pnl-month-select').value;
       if (view.isMonthly || selectedMonth === 'cur') {
-        document.getElementById('pnl-title-badge').textContent = view.isMonthly
-          ? (view.ym + ' 실제 월별 손익 (엑셀 수집 ' + vTxs.length + '건 · 13·14·23일 카드 + 20일 재료비)')
-          : '당월 실시간 손익 (13·14·23일 카드 + 20일 현금재료비 모두 반영)';
-        document.getElementById('pnl-verdict-tag').textContent = netProfitCur >= 0 ? '흑자' : '적자';
+        document.getElementById('pnl-title-badge').textContent = view.isEmptyYear
+          ? (activeYear + '년 업로드된 월 내역 없음 (위 [📂 엑셀/CSV 올리기]에서 파일을 올려주세요)')
+          : (view.isMonthly
+            ? (view.ym + ' 실제 월별 손익 (엑셀 수집 ' + vTxs.length + '건 · 13·14·23일 카드 + 20일 재료비)')
+            : '당월 실시간 손익 (13·14·23일 카드 + 20일 현금재료비 모두 반영)');
+        document.getElementById('pnl-verdict-tag').textContent = view.isEmptyYear ? '대기' : (netProfitCur >= 0 ? '흑자' : '적자');
         document.getElementById('pnl-net-profit').textContent = (netProfitCur >= 0 ? '+' : '') + fmtWon(netProfitCur);
         document.getElementById('pnl-margin').textContent = marginCur;
 
         const mKeys = Object.keys(appState.monthlyData || {}).sort();
-        let activeEndBal = totalBankNow;
-        let prevEndBal = day24Base;
-        if (view.isMonthly && vData.endBalances) {
+        let activeEndBal = view.isEmptyYear ? 0 : totalBankNow;
+        let prevEndBal = view.isEmptyYear ? 0 : day24Base;
+        if (view.isMonthly && !view.isEmptyYear && vData.endBalances) {
           const ebW = vData.endBalances.woori !== null ? vData.endBalances.woori : appState.balances.woori;
           const ebK = vData.endBalances.kyongnam !== null ? vData.endBalances.kyongnam : 0;
           activeEndBal = ebW + ebK;
@@ -2753,9 +3226,11 @@
             prevEndBal = (pEb.woori || 0) + (pEb.kyongnam || 0);
           }
         }
-        document.getElementById('pnl-day24-sub').textContent = view.isMonthly
-          ? ('전월말(' + fmtMan(prevEndBal) + ') ➔ 월말(' + fmtMan(activeEndBal) + ')')
-          : ('전월24일(' + fmtMan(day24Base) + ') ➔ 현재(' + fmtMan(totalBankNow) + ')');
+        document.getElementById('pnl-day24-sub').textContent = view.isEmptyYear
+          ? (activeYear + '년 업로드 내역 없음')
+          : (view.isMonthly
+            ? ('전월말(' + fmtMan(prevEndBal) + ') ➔ 월말(' + fmtMan(activeEndBal) + ')')
+            : ('전월24일(' + fmtMan(day24Base) + ') ➔ 현재(' + fmtMan(totalBankNow) + ')'));
         const diff24 = activeEndBal - prevEndBal;
         document.getElementById('pnl-day24-diff').textContent = (diff24 >= 0 ? '+' : '') + fmtWon(diff24);
 
@@ -2861,31 +3336,41 @@
       }).join('');
 
       const compBody = document.getElementById('monthly-comparison-body');
+      const compTitleEl = document.getElementById('monthly-comparison-title');
       const taxSummaryGrid = document.getElementById('korean-tax-summary-grid');
       const ytdTitleEl = document.getElementById('ytd-tax-title');
       const ytdBodyEl = document.getElementById('ytd-tax-body');
+      const allYmKeys = Object.keys(appState.monthlyData || {}).sort();
+      const ymKeys = allYmKeys.filter(function(ym) { return ym.slice(0, 4) === activeYear; });
+      if (compTitleEl) {
+        compTitleEl.textContent = '📊 ' + activeYear + '년 월별 손익 추이 비교 (' + (ymKeys.length ? (ymKeys.length + '개월 집계') : '업로드 월 자동 집계') + ')';
+      }
       if (compBody) {
-        const ymKeys = Object.keys(appState.monthlyData || {}).sort();
         if (!ymKeys.length) {
-          compBody.innerHTML = '<tr><td colspan="7" class="py-3 text-center text-[var(--muted-foreground)]">엑셀 파일을 올리시면 월별 비교표가 자동 생성됩니다.</td></tr>';
+          const emptyMsg = allYmKeys.length
+            ? (activeYear + '년 업로드된 월 내역이 없습니다. 위 [📂 엑셀/CSV 올리기]로 ' + activeYear + '년 파일을 올려주세요.')
+            : '엑셀 파일을 올리시면 월별 비교표가 자동 생성됩니다.';
+          compBody.innerHTML = '<tr><td colspan="7" class="py-3 text-center text-[var(--muted-foreground)]">' + emptyMsg + '</td></tr>';
           if (taxSummaryGrid) {
-            taxSummaryGrid.innerHTML = '<div class="p-3 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--muted-foreground)] md:col-span-3">엑셀 업로드 시 상반기·하반기·연간 합산 세금이 자동 계산됩니다.</div>';
+            taxSummaryGrid.innerHTML = '<div class="p-3 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--muted-foreground)] md:col-span-3">' + activeYear + '년 엑셀 업로드 시 상반기·하반기·연간 합산 세금이 자동 계산됩니다.</div>';
+          }
+          if (ytdTitleEl) {
+            ytdTitleEl.textContent = '🇰🇷 ' + activeYear + '년 누적 부가세 적립 & 국내 세법 예상 종합소득세';
           }
           if (ytdBodyEl) {
-            ytdBodyEl.innerHTML = '<div class="p-3 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--muted-foreground)] md:col-span-2">엑셀 파일을 올리시면 선택하신 월까지의 1~N월 누적 부가세 적립액과 국내 세법 기준 예상 종합소득세가 자동 계산됩니다.</div>';
+            ytdBodyEl.innerHTML = '<div class="p-3 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--muted-foreground)] md:col-span-2">' + activeYear + '년 엑셀 파일을 올리시면 선택하신 월까지의 1~N월 누적 부가세 적립액과 국내 세법 기준 예상 종합소득세가 자동 계산됩니다.</div>';
           }
         } else {
           const vatRate = getTaxRates(appState.settings).vatRate;
-          const activeYm = view.isMonthly ? view.ym : ymKeys[ymKeys.length - 1];
-          const activeYear = activeYm.slice(0, 4);
+          const activeYm = (view.isMonthly && !view.isEmptyYear && view.ym.slice(0, 4) === activeYear) ? view.ym : ymKeys[ymKeys.length - 1];
           const activeMonthNum = parseInt(activeYm.slice(5, 7), 10) || 12;
           const vatStartMonth = activeMonthNum >= 7 ? 7 : 1;
           const ytdStats = { rev: 0, exp: 0, vat: 0, incAdvance: 0, incPrevYear: 0, lump: 0, months: 0 };
           const vatStats = { rev: 0, vat: 0, prepaid: 0, h1Settle: 0 };
           const periodStats = {
-            h1: { label: '📅 상반기 (1~6월)', rev: 0, exp: 0, vat: 0, lump: 0, months: 0 },
-            h2: { label: '📅 하반기 (7~12월 누적)', rev: 0, exp: 0, vat: 0, lump: 0, months: 0 },
-            yr: { label: '📆 연간 전체 누적 (1~12월)', rev: 0, exp: 0, vat: 0, lump: 0, months: 0 }
+            h1: { label: '📅 ' + activeYear + ' 상반기 (1~6월)', rev: 0, exp: 0, vat: 0, lump: 0, months: 0 },
+            h2: { label: '📅 ' + activeYear + ' 하반기 (7~12월 누적)', rev: 0, exp: 0, vat: 0, lump: 0, months: 0 },
+            yr: { label: '📆 ' + activeYear + ' 연간 누적 (1~12월)', rev: 0, exp: 0, vat: 0, lump: 0, months: 0 }
           };
 
           compBody.innerHTML = ymKeys.map(function(ym) {
@@ -2934,7 +3419,7 @@
               periodStats[pk].months += 1;
             });
 
-            return '<tr class="cursor-pointer hover:bg-[var(--secondary)]' + isSel + '" onclick="document.getElementById(\'pnl-month-select\').value=\'' + ym + '\'; renderAll(true); switchTab(\'pnl\');">' +
+            return '<tr class="cursor-pointer hover:bg-[var(--secondary)]' + isSel + '" onclick="jumpToMonth(\'' + ym + '\')">' +
               '<td class="py-1.5 text-left font-bold">' + ym + '</td>' +
               '<td class="py-1.5">' + fmtMan(rev) + '</td>' +
               '<td class="py-1.5 text-[var(--error)]">-' + fmtMan(fix) + '</td>' +
@@ -2949,7 +3434,7 @@
             const incRangeLbl = activeMonthNum === 1 ? '1월' : ('1~' + activeMonthNum + '월');
             const vatRangeLbl = vatStartMonth === activeMonthNum ? (vatStartMonth + '월') : (vatStartMonth + '~' + activeMonthNum + '월');
             const isLatestMonth = activeYm === ymKeys[ymKeys.length - 1];
-            const unbanked = isLatestMonth ? Math.max(0, appState.settings.unbankedCash || 0) : 0;
+            const unbanked = (activeYear === '2026' && isLatestMonth) ? Math.max(0, appState.settings.unbankedCash || 0) : 0;
             const unbankedVat = Math.round(unbanked * vatRate);
             const vatRevWithCash = vatStats.rev + unbanked;
             const vatTotalWithCash = vatStats.vat + unbankedVat;
@@ -3023,8 +3508,8 @@
         const db = b.sortDt || b.datetime || '';
         return db.localeCompare(da);
       });
-      const mKeysAll = Object.keys(appState.monthlyData || {});
-      const allUncertainTxs = mKeysAll.length ? mKeysAll.reduce(function(acc, ym) {
+      const mKeysYear = allYmKeys.filter(function(ym) { return ym.slice(0, 4) === activeYear; });
+      const allUncertainTxs = mKeysYear.length ? mKeysYear.reduce(function(acc, ym) {
         const list = (appState.monthlyData[ym] && appState.monthlyData[ym].transactions) || [];
         return acc.concat(list.filter(function(t) { return Boolean(t.isUncertain); }));
       }, []).sort(function(a, b) {
@@ -3040,17 +3525,45 @@
         const uncBorder = t.isUncertain ? ' bg-[var(--secondary)]/50 px-2 rounded' : '';
         const memoBadge = t.memo ? ' <span class="text-[var(--primary)] font-medium">· 📝 ' + escapeHtml(t.memo) + '</span>' : '';
         const dtDisp = (txFilterMode === 'uncertain' && t.sortDt) ? t.sortDt.slice(0, 16) : t.datetime;
+
+        const idParts = String(t.id || '').split('|');
+        const canReassign = (t.type === 'BANK_IN' || t.type === 'BANK_OUT') && idParts.length >= 8 && (idParts[0] === 'woori' || idParts[0] === 'kyongnam');
+        let selectHtml = '';
+        if (canReassign) {
+          const dir = t.type === 'BANK_IN' ? 'IN' : 'OUT';
+          const assignedRule = getTxAssignedRuleKey(t);
+          const opts = getCustomRuleOptionsForDir(dir);
+          const selStyle = assignedRule
+            ? 'bg-[var(--primary)]/15 border-[var(--primary)] text-[var(--primary)] font-bold'
+            : (t.isUncertain ? 'bg-[var(--warning)]/20 border-[var(--warning)] text-[var(--warning)] font-bold' : 'bg-[var(--secondary)] border-[var(--border)] text-[var(--foreground)]');
+          const headOpt = assignedRule
+            ? '<option value="auto">🤖 자동분류로 복원</option>'
+            : '<option value="" selected>' + (t.isUncertain ? '🤔 직접 지정 ▾' : '분류변경 ▾') + '</option>';
+          selectHtml = '<select data-txid="' + escapeHtml(t.id) + '" onchange="assignTxCustomCategory(this.getAttribute(\'data-txid\'), this.value)" class="px-1.5 py-0.5 rounded border text-[11px] max-w-[148px] cursor-pointer ' + selStyle + '">' +
+            headOpt +
+            opts.map(function(o) {
+              const selAttr = o.code === assignedRule ? ' selected' : '';
+              return '<option value="' + o.code + '"' + selAttr + '>' + o.label + '</option>';
+            }).join('') +
+          '</select>';
+        }
+
         return '<div class="py-2 flex items-center justify-between gap-2' + uncBorder + '">' +
-          '<div class="truncate">' +
-            '<span class="font-bold">' + escapeHtml(t.badge) + ' ' + escapeHtml(t.title) + '</span>' +
+          '<div class="min-w-0 flex-1">' +
+            '<div class="font-bold truncate">' + escapeHtml(t.badge) + ' ' + escapeHtml(t.title) + '</div>' +
             '<div class="text-[var(--muted-foreground)] truncate">' + escapeHtml(dtDisp) + ' · ' + escapeHtml(t.sub) + memoBadge + '</div>' +
           '</div>' +
-          '<span class="font-mono font-bold ' + color + ' shrink-0">' + prefix + fmtWon(t.amount) + '</span>' +
+          '<div class="flex flex-col items-end gap-1 shrink-0">' +
+            '<span class="font-mono font-bold ' + color + '">' + prefix + fmtWon(t.amount) + '</span>' +
+            selectHtml +
+          '</div>' +
         '</div>';
       }).join('') : '<div class="py-4 text-center text-[var(--muted-foreground)]">표시할 거래내역이 없습니다.</div>';
 
+      renderYoYComparisonTable();
+
       const pgModeLabel = appState.settings.pgIsActual ? '갤럭시아 실데이터 연동됨' : '갤럭시아PG 연동';
-      document.getElementById('cat-in-header').textContent = '📥 수입 6대 항목 (' + (view.isMonthly ? view.ym : pgModeLabel) + ')';
+      document.getElementById('cat-in-header').textContent = '📥 수입 6대 항목 (' + (view.isEmptyYear ? (activeYear + '년 업로드 없음') : (view.isMonthly ? view.ym : pgModeLabel)) + ')';
       document.getElementById('cat-in-total').textContent = fmtWon(totalInflow);
       const inItems = [
         { label: '💳 유선카드·PG정산 (갤럭시아/KSNET)', val: inf.pgCard, c: 'var(--chart-1)' },
@@ -3114,12 +3627,14 @@
       const badgeEl = document.getElementById('review-period-badge');
       if (!kpiEl || !prosEl || !consEl || !actEl) return;
 
-      const ymKeys = Object.keys(appState.monthlyData || {}).sort();
+      const activeYear = getActiveYear();
+      const ymKeys = Object.keys(appState.monthlyData || {}).sort().filter(function(ym) { return ym.slice(0, 4) === activeYear; });
       if (!ymKeys.length) {
-        kpiEl.innerHTML = '<div class="col-span-4 p-3 rounded-lg bg-[var(--background)] text-[var(--muted-foreground)]">엑셀 파일을 업로드하시면 누적 매출·비용·현금흐름 기반 자동 진단이 표시됩니다.</div>';
-        prosEl.innerHTML = '<div class="text-[var(--muted-foreground)]">데이터 업로드 대기 중</div>';
-        consEl.innerHTML = '<div class="text-[var(--muted-foreground)]">데이터 업로드 대기 중</div>';
-        actEl.innerHTML = '<div class="text-[var(--muted-foreground)]">데이터 업로드 대기 중</div>';
+        if (badgeEl) badgeEl.textContent = activeYear + '년 (업로드 데이터 없음)';
+        kpiEl.innerHTML = '<div class="col-span-5 p-3 rounded-lg bg-[var(--background)] text-[var(--muted-foreground)]">' + activeYear + '년 엑셀 파일을 업로드하시면 ' + activeYear + '년 매출·비용·현금흐름 기반 자동 진단이 표시됩니다.</div>';
+        prosEl.innerHTML = '<div class="text-[var(--muted-foreground)]">' + activeYear + '년 데이터 업로드 대기 중</div>';
+        consEl.innerHTML = '<div class="text-[var(--muted-foreground)]">' + activeYear + '년 데이터 업로드 대기 중</div>';
+        actEl.innerHTML = '<div class="text-[var(--muted-foreground)]">' + activeYear + '년 데이터 업로드 대기 중</div>';
         return;
       }
 
@@ -3178,7 +3693,7 @@
         }
       });
 
-      const unbanked = Math.max(0, appState.settings.unbankedCash || 0);
+      const unbanked = activeYear === '2026' ? Math.max(0, appState.settings.unbankedCash || 0) : 0;
       const totRevAll = totRev + unbanked;
       const totOpProfit = totRevAll - totExp;
       const totalLiquidity = totalBankNow + unbanked;
@@ -3196,12 +3711,12 @@
       const mktRatio = ((totMkt / Math.max(1, totRevAll)) * 100).toFixed(1);
       const avgRev = Math.round(totRevAll / ymKeys.length);
 
-      if (badgeEl) badgeEl.textContent = ymKeys[0] + ' ~ ' + ymKeys[ymKeys.length - 1] + ' (' + ymKeys.length + '개월 · 1월1일~현재 누적' + (unbanked > 0 ? ' · 보유현금 포함' : '') + ')';
+      if (badgeEl) badgeEl.textContent = ymKeys[0] + ' ~ ' + ymKeys[ymKeys.length - 1] + ' (' + activeYear + '년 ' + ymKeys.length + '개월 누적' + (unbanked > 0 ? ' · 보유현금 포함' : '') + ')';
 
       kpiEl.innerHTML =
-        '<div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]"><div class="text-[var(--muted-foreground)]">1/1~현재 총매출</div><div class="font-mono font-bold text-sm mt-0.5">' + fmtMan(totRevAll) + '원</div><div class="text-[11px] text-[var(--muted-foreground)]">월평균 ' + fmtMan(avgRev) + '원' + (unbanked > 0 ? ' (현금+' + fmtMan(unbanked) + ')' : '') + '</div></div>' +
-        '<div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]"><div class="text-[var(--muted-foreground)]">1/1~현재 영업지출</div><div class="font-mono font-bold text-sm mt-0.5 text-[var(--error)]">-' + fmtMan(totExp) + '원</div><div class="text-[11px] text-[var(--muted-foreground)]">세금일시납 별도 ' + fmtMan(totTaxLump) + '원</div></div>' +
-        '<div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]"><div class="text-[var(--muted-foreground)]">1/1~현재 영업순이익</div><div class="font-mono font-bold text-sm mt-0.5 ' + (totOpProfit >= 0 ? 'text-[var(--success)]' : 'text-[var(--error)]') + '">' + (totOpProfit >= 0 ? '+' : '') + fmtMan(totOpProfit) + '원</div><div class="text-[11px] text-[var(--muted-foreground)]">영업이익률 ' + opMargin + '%</div></div>' +
+        '<div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]"><div class="text-[var(--muted-foreground)]">' + activeYear + '년 총매출</div><div class="font-mono font-bold text-sm mt-0.5">' + fmtMan(totRevAll) + '원</div><div class="text-[11px] text-[var(--muted-foreground)]">월평균 ' + fmtMan(avgRev) + '원' + (unbanked > 0 ? ' (현금+' + fmtMan(unbanked) + ')' : '') + '</div></div>' +
+        '<div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]"><div class="text-[var(--muted-foreground)]">' + activeYear + '년 영업지출</div><div class="font-mono font-bold text-sm mt-0.5 text-[var(--error)]">-' + fmtMan(totExp) + '원</div><div class="text-[11px] text-[var(--muted-foreground)]">세금일시납 별도 ' + fmtMan(totTaxLump) + '원</div></div>' +
+        '<div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]"><div class="text-[var(--muted-foreground)]">' + activeYear + '년 영업순이익</div><div class="font-mono font-bold text-sm mt-0.5 ' + (totOpProfit >= 0 ? 'text-[var(--success)]' : 'text-[var(--error)]') + '">' + (totOpProfit >= 0 ? '+' : '') + fmtMan(totOpProfit) + '원</div><div class="text-[11px] text-[var(--muted-foreground)]">영업이익률 ' + opMargin + '%</div></div>' +
         '<div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--primary)]"><div class="text-[var(--muted-foreground)]">현재 총 보유자금</div><div class="font-mono font-bold text-sm mt-0.5 text-[var(--primary)]">' + fmtMan(totalLiquidity) + '원</div><div class="text-[11px] text-[var(--muted-foreground)]">통장 ' + fmtMan(totalBankNow) + ' + 현금 ' + fmtMan(unbanked) + '</div></div>' +
         '<div class="p-2.5 rounded-lg bg-[var(--background)] border-2 border-[var(--success)]"><div class="font-bold text-[var(--success)]">💎 세금뺀 순수 자금</div><div class="font-mono font-bold text-sm mt-0.5 ' + (pureCashAfterTax >= 0 ? 'text-[var(--success)]' : 'text-[var(--error)]') + '">' + fmtMan(pureCashAfterTax) + '원</div><div class="text-[11px] text-[var(--muted-foreground)]">보유자금 - 남은세금 ' + fmtMan(remainTotalTax) + '</div></div>';
 
@@ -3356,12 +3871,20 @@
 
     function reclassifyAllMonths(showToast, skipSave) {
       if (!appState || !appState.monthlyData) return false;
-      if (appState.settings && appState.settings.internalKeywords === '집금,내통장,내부,피부과') {
+      if (!appState.settings) appState.settings = cloneObj(INITIAL_STATE.settings);
+      if (!appState.settings.customRules || typeof appState.settings.customRules !== 'object') {
+        appState.settings.customRules = {};
+      }
+      if (!appState.settings.yoyMetric) appState.settings.yoyMetric = 'rev';
+      if (appState.settings.internalKeywords === '집금,내통장,내부,피부과') {
         appState.settings.internalKeywords = '집금,내통장,내부';
       }
       const kwList = String((appState.settings && appState.settings.internalKeywords) || '집금,내통장,내부').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
       const ymKeys = Object.keys(appState.monthlyData).sort();
       if (!ymKeys.length) return false;
+      if (!appState.settings.activeYear) {
+        appState.settings.activeYear = ymKeys[ymKeys.length - 1].slice(0, 4);
+      }
 
       const atMaxByYm = {};
       ymKeys.forEach(function(ym) {
@@ -3404,6 +3927,7 @@
           const desc = parts.slice(7).join('|') || t.title || '';
           const cancelled = Boolean(t.cancelled || t.badge === '🔄 대체취소(상계)');
           const cls = classifyBankTransaction({
+            txId: t.id,
             bank: bank,
             dtNorm: dtNorm,
             ym: ym,
