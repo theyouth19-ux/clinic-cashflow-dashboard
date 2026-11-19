@@ -142,6 +142,9 @@
           <span id="real-mode-badge" class="text-[var(--warning)] font-semibold">⚠️ 테스트용 가상 샘플</span>
         </div>
         <div class="flex items-center gap-2">
+          <button type="button" onclick="reclassifyAllMonths(true)" class="px-2.5 py-1 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] font-bold hover:opacity-90">
+            🔁 전체 재분류
+          </button>
           <button type="button" onclick="resetToRealWooriOnly()" class="px-2.5 py-1 rounded-lg bg-[var(--error)] text-white font-bold hover:opacity-90">
             🧹 전체 초기화 (0원)
           </button>
@@ -852,7 +855,7 @@
         vatRate: 0.05,
         incomeTaxRate: 0.33,
         unbankedCash: 0,
-        internalKeywords: '집금,내통장,내부,피부과',
+        internalKeywords: '집금,내통장,내부',
         webhookUrl: '',
         secretToken: 'clinic-24'
       },
@@ -1199,7 +1202,6 @@
           });
 
           testCount += 1;
-          const cntEl = document.getElementById('sim-click-count'); if (cntEl) cntEl.textContent = '수집 반영: ' + testCount + '건';
           appState.balances.updatedAt = 'PC로봇 수집 (' + nowTime + ')';
           safeSaveState();
           renderAll(true);
@@ -1233,7 +1235,6 @@
       const signedAmount = isCancel ? -rawAmount : rawAmount;
 
       testCount += 1;
-      const cntEl = document.getElementById('sim-click-count'); if (cntEl) cntEl.textContent = '수집 반영: ' + testCount + '건';
 
       const isCardMsg = text.indexOf('승인') !== -1 || (text.indexOf('카드') !== -1 && text.indexOf('입금') === -1 && text.indexOf('출금') === -1);
       if (isCardMsg) {
@@ -1282,7 +1283,6 @@
             toast.textContent = '⏭️ [타계좌 자동 제외] 지정된 우리은행 계좌(' + acctCheck.targetAccount + ')가 아닌 다른 계좌(' + acctCheck.detectedAccount + ') 내역이므로 반영하지 않았습니다.';
             toast.classList.remove('hidden');
             testCount = Math.max(0, testCount - 1);
-            const cntEl = document.getElementById('sim-click-count'); if (cntEl) cntEl.textContent = '수집 반영: ' + testCount + '건';
             return 'EXCLUDED_WOORI';
           }
         } else if (bank === 'kyongnam') {
@@ -1292,14 +1292,13 @@
             toast.textContent = '⏭️ [타계좌 자동 제외] 지정된 경남은행 계좌(' + acctCheck.targetAccount + ')가 아닌 다른 계좌(' + acctCheck.detectedAccount + ') 내역이므로 반영하지 않았습니다.';
             toast.classList.remove('hidden');
             testCount = Math.max(0, testCount - 1);
-            const cntEl = document.getElementById('sim-click-count'); if (cntEl) cntEl.textContent = '수집 반영: ' + testCount + '건';
             return 'EXCLUDED_WOORI';
           }
         }
 
         const isWithdrawal = text.indexOf('출금') !== -1 || text.indexOf('지급') !== -1;
 
-        const kwList = (appState.settings.internalKeywords || '집금,내통장,내부,피부과')
+        const kwList = (appState.settings.internalKeywords || '집금,내통장,내부')
           .split(',')
           .map(function(s) { return s.trim(); })
           .filter(Boolean);
@@ -1406,16 +1405,6 @@
       const toast = document.getElementById('sim-toast');
       toast.textContent = toastMsg;
       toast.classList.remove('hidden');
-    }
-
-    function sendTestRecord(text) {
-      const smsInp = document.getElementById('custom-sms-input'); if (smsInp) smsInp.value = text;
-      processRecordText(text);
-    }
-
-    function sendCustomRecord() {
-      const smsInp = document.getElementById('custom-sms-input'); const val = smsInp ? smsInp.value : '';
-      processRecordText(val);
     }
 
     function runFullPcAutoCollectDemo() {
@@ -1869,7 +1858,7 @@
       let latestDt = '';
       let latestBal = null;
       const acctKey = detectedAcct || (bank === 'kyongnam' ? '207-0172-8715-04' : '1005-104-863854');
-      const kwList = String(appState.settings.internalKeywords || '집금,내통장,내부,피부과').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+      const kwList = String(appState.settings.internalKeywords || '집금,내통장,내부').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
 
       const parsedRaw = [];
       targetRows.slice(headerIdx + 1).forEach(function(tr) {
@@ -2074,7 +2063,7 @@
       let latestDt = '';
       let latestBal = null;
       const acctKey = detectedAcct || (bank === 'kyongnam' ? '207-0172-8715-04' : '1005-104-863854');
-      const kwList = String(appState.settings.internalKeywords || '집금,내통장,내부,피부과').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+      const kwList = String(appState.settings.internalKeywords || '집금,내통장,내부').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
 
       const parsedRaw = [];
       for (let i = headerIdx + 1; i < lines.length; i++) {
@@ -2442,7 +2431,7 @@
       const rates = getTaxRates(appState.settings);
       document.getElementById('inp-vat-rate').value = (rates.vatRate * 100).toFixed(1);
       document.getElementById('inp-income-tax-rate').value = (rates.incomeTaxRate * 100).toFixed(1);
-      document.getElementById('inp-internal-kw').value = appState.settings.internalKeywords || '집금,내통장,내부,피부과';
+      document.getElementById('inp-internal-kw').value = appState.settings.internalKeywords || '집금,내통장,내부';
       const unbEl = document.getElementById('inp-unbanked-cash');
       if (unbEl) unbEl.value = appState.settings.unbankedCash || 0;
     }
@@ -2482,7 +2471,7 @@
       const incPct = parseFloat(document.getElementById('inp-income-tax-rate').value || '33.0');
       appState.settings.vatRate = Math.max(0, Math.min(0.3, vatPct / 100));
       appState.settings.incomeTaxRate = Math.max(0, Math.min(0.6, incPct / 100));
-      appState.settings.internalKeywords = document.getElementById('inp-internal-kw').value || '집금,내통장,내부,피부과';
+      appState.settings.internalKeywords = document.getElementById('inp-internal-kw').value || '집금,내통장,내부';
 
       appState.balances.updatedAt = '초기값 직접 설정됨';
       safeSaveState();
@@ -2587,8 +2576,6 @@
       appState.monthlyData = {};
       syncMonthSelectOptions();
       testCount = 0;
-      const cntEl = document.getElementById('sim-click-count');
-      if (cntEl) cntEl.textContent = '수집 반영: 0건';
       applySimPreset(0, 0, 0, 0);
       syncInputsFromState();
       safeSaveState();
@@ -2641,8 +2628,6 @@
       syncMonthSelectOptions();
 
       testCount = 0;
-      const cntEl = document.getElementById('sim-click-count');
-      if (cntEl) cntEl.textContent = '수집 반영: 0건';
       syncInputsFromState();
       safeSaveState();
       renderAll(true);
@@ -3363,29 +3348,95 @@
       return changed;
     }
 
-    function upgradeLegacyUncertainCards() {
+    function reclassifyAllMonths(showToast, skipSave) {
       if (!appState || !appState.monthlyData) return false;
-      let changed = reconcileCrossBankTransfers();
-      Object.keys(appState.monthlyData).forEach(function(ym) {
+      if (appState.settings && appState.settings.internalKeywords === '집금,내통장,내부,피부과') {
+        appState.settings.internalKeywords = '집금,내통장,내부';
+      }
+      const kwList = String((appState.settings && appState.settings.internalKeywords) || '집금,내통장,내부').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+      const ymKeys = Object.keys(appState.monthlyData).sort();
+      if (!ymKeys.length) return false;
+
+      const atMaxByYm = {};
+      ymKeys.forEach(function(ym) {
         const mD = appState.monthlyData[ym];
         (mD.transactions || []).forEach(function(t) {
-          if (t.isUncertain && /케이비국민카드|케\*비국민카드|국민카드/.test((t.id || '') + ' ' + (t.title || ''))) {
-            if (t.bucketTarget) applyBucketTarget(mD, t.bucketTarget, -t.amount);
-            applyBucketTarget(mD, 'cards.card14', t.amount);
-            t.badge = '💳 카드대금출금';
-            t.sub = '사업자카드 결제출금';
-            t.isUncertain = false;
-            t.bucketTarget = 'cards.card14';
-            t.bucketDelta = t.amount;
-            changed = true;
+          const parts = String(t.id || '').split('|');
+          if (parts.length < 8) return;
+          const outAmt = parseInt(parts[3] || '0', 10) || (t.type === 'BANK_OUT' ? t.amount : 0);
+          const desc = parts.slice(7).join('|') || t.title || '';
+          const cancelled = Boolean(t.cancelled || t.badge === '🔄 대체취소(상계)');
+          if (!cancelled && outAmt > 0 && /주식회사 에이티/.test(desc)) {
+            if (!atMaxByYm[ym] || outAmt > atMaxByYm[ym]) atMaxByYm[ym] = outAmt;
           }
         });
       });
-      if (changed) {
-        syncLatestMonthToTopLevel();
-        safeSaveState();
+
+      ymKeys.forEach(function(ym) {
+        const mD = appState.monthlyData[ym];
+        mD.inflowTotals = { pgCard: 0, wirelessCard: 0, cashHana: 0, platformKyongnam: 0, naverPay: 0, kakaoPay: 0 };
+        mD.outflowTotals = { payroll: 0, lease: 0, taxInsRent: 0, taxLumpSum: 0, vatLumpSum: 0, vatH1Settle: 0, incLumpSum: 0, incAdvance: 0, incPrevYear: 0, rent: 0, supplyCard: 0, marketingCard: 0, welfareOtherCard: 0 };
+        if (!mD.cards) mD.cards = {};
+        if (!mD.cards.card13) mD.cards.card13 = { currentMonthSwipes: 0, confirmedNextWithdraw: 0 }; else mD.cards.card13.currentMonthSwipes = 0;
+        if (!mD.cards.card14) mD.cards.card14 = { currentMonthSwipes: 0, confirmedNextWithdraw: 0 }; else mD.cards.card14.currentMonthSwipes = 0;
+        if (!mD.cards.card23) mD.cards.card23 = { currentMonthSwipes: 0, confirmedNextWithdraw: 0 }; else mD.cards.card23.currentMonthSwipes = 0;
+        mD.cards.scheduledSupplyTransfer20 = 0;
+
+        (mD.transactions || []).forEach(function(t) {
+          const parts = String(t.id || '').split('|');
+          if (parts.length < 8 || (parts[0] !== 'woori' && parts[0] !== 'kyongnam')) {
+            if (t.bucketTarget) {
+              applyBucketTarget(mD, t.bucketTarget, typeof t.bucketDelta === 'number' ? t.bucketDelta : t.amount);
+            }
+            return;
+          }
+          const bank = parts[0];
+          const dtNorm = parts[2] || t.sortDt || '';
+          const outAmt = parseInt(parts[3] || '0', 10) || (t.type === 'BANK_OUT' ? t.amount : 0);
+          const inAmt = parseInt(parts[4] || '0', 10) || (t.type === 'BANK_IN' ? t.amount : 0);
+          const summary = parts[6] || '';
+          const desc = parts.slice(7).join('|') || t.title || '';
+          const cancelled = Boolean(t.cancelled || t.badge === '🔄 대체취소(상계)');
+          const cls = classifyBankTransaction({
+            bank: bank,
+            dtNorm: dtNorm,
+            ym: ym,
+            summary: summary,
+            desc: desc,
+            memo: t.memo || '',
+            branch: t.branch || '',
+            outAmt: outAmt,
+            inAmt: inAmt,
+            kwList: kwList,
+            atMaxByYm: atMaxByYm,
+            cancelled: cancelled
+          });
+          if (cls.bucketTarget) applyBucketTarget(mD, cls.bucketTarget, cls.bucketDelta);
+          t.badge = cls.badge;
+          t.sub = cls.sub;
+          t.isUncertain = cls.isUncertain;
+          t.bucketTarget = cls.bucketTarget;
+          t.bucketDelta = cls.bucketDelta;
+        });
+      });
+
+      reconcileCrossBankTransfers();
+      syncLatestMonthToTopLevel();
+      syncInputsFromState();
+      if (!skipSave) safeSaveState();
+      if (showToast) {
+        renderAll(true);
+        const toast = document.getElementById('sim-toast');
+        if (toast) {
+          toast.textContent = '🔁 전체 월 거래내역을 최신 분류 규칙으로 다시 계산했습니다!';
+          toast.classList.remove('hidden');
+        }
       }
-      return changed;
+      return true;
+    }
+
+    function upgradeLegacyUncertainCards(skipSave) {
+      return reclassifyAllMonths(false, skipSave);
     }
 
     // 초기 진입 시 화면 폭에 따라 폴드5(접음) vs PC·폴드5(펼침) 자동 감지
@@ -3399,7 +3450,7 @@
       } else {
         setScreenMode('unfolded');
       }
-      upgradeLegacyUncertainCards();
+      upgradeLegacyUncertainCards(true);
       syncMonthSelectOptions();
       renderAll(false);
 
@@ -3409,7 +3460,7 @@
         .then(function(data) {
           if (data && data.ok && data.state) {
             appState = data.state;
-            upgradeLegacyUncertainCards();
+            upgradeLegacyUncertainCards(false);
             syncMonthSelectOptions();
             renderAll(false);
           }

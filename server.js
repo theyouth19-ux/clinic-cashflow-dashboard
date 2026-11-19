@@ -34,7 +34,7 @@ const INITIAL_DB = {
     pgSplitRatio: { card: 0.80, naver: 0.12, kakao: 0.08, feeRate: 0.028 },
     pgIsActual: false,
     taxReserveRate: 0.085,
-    internalKeywords: '집금,내통장,내부,피부과',
+    internalKeywords: '집금,내통장,내부',
     webhookUrl: '',
     secretToken: 'clinic-24'
   },
@@ -334,11 +334,27 @@ const server = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ ok: true, state: INITIAL_DB }));
   }
 
-  // 정적 파일 서빙 (루트 index.html 우선, 없으면 public/)
+  // 정적 파일 서빙 (보안: data/, config/, 내부 스크립트 차단 + public/ 허용 자산만 서빙)
   let reqPath = req.url === '/' ? '/index.html' : req.url.split('?')[0];
-  let fullPath = path.join(__dirname, reqPath);
-  if (!fs.existsSync(fullPath) || !fs.statSync(fullPath).isFile()) {
-    fullPath = path.join(__dirname, 'public', reqPath);
+  try { reqPath = decodeURIComponent(reqPath); } catch (e) {}
+  const blockedPrefixes = ['/data', '/config', '/.git', '/cloud-deploy', '/docs', '/server', '/auto_collector', '/start_dashboard'];
+  const normPath = reqPath.replace(/\\/g, '/').toLowerCase();
+  if (normPath.includes('..') || blockedPrefixes.some(p => normPath === p || normPath.startsWith(p + '/') || normPath.startsWith(p + '.'))) {
+    res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+    return res.end('Forbidden');
+  }
+
+  const allowedNames = {
+    '/index.html': path.join(__dirname, 'index.html'),
+    '/manifest.json': path.join(__dirname, 'manifest.json'),
+    '/xlsx.full.min.js': path.join(__dirname, 'public', 'xlsx.full.min.js')
+  };
+  let fullPath = allowedNames[reqPath] || path.join(__dirname, 'public', reqPath.replace(/^\/+/, ''));
+  const resolvedPublic = path.resolve(path.join(__dirname, 'public'));
+  const resolvedTarget = path.resolve(fullPath);
+  if (!allowedNames[reqPath] && !resolvedTarget.startsWith(resolvedPublic + path.sep)) {
+    res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+    return res.end('Forbidden');
   }
 
   if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
@@ -357,6 +373,18 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+function syncPublicAssets() {
+  try {
+    const rootHtml = path.join(__dirname, 'index.html');
+    const pubHtml = path.join(__dirname, 'public', 'index.html');
+    if (fs.existsSync(rootHtml)) fs.copyFileSync(rootHtml, pubHtml);
+    const pubXlsx = path.join(__dirname, 'public', 'xlsx.full.min.js');
+    const rootXlsx = path.join(__dirname, 'xlsx.full.min.js');
+    if (fs.existsSync(pubXlsx)) fs.copyFileSync(pubXlsx, rootXlsx);
+  } catch (e) {}
+}
+
+syncPublicAssets();
 server.listen(PORT, HOST, () => {
   console.log(`[PC 자동수집 서버 가동] http://${HOST}:${PORT}`);
   console.log(`[스마트 자동수집 폴더] ${INBOX_DIR}`);
